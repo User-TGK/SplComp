@@ -1,13 +1,13 @@
 #[derive(Debug, Eq, PartialEq)]
 pub struct Token {
-    pub kind: TokenType,
+    pub kind: TokenKind,
     line: u32,
     column: u32,
 }
 
 /// Represents terminal tokens.
 #[derive(Debug, Eq, PartialEq)]
-pub enum TokenType {
+pub enum TokenKind {
     // Operators
     /// "+"
     Plus,
@@ -39,6 +39,8 @@ pub enum TokenType {
     Cons,
     /// "!"
     Not,
+    /// "="
+    Assign,
 
     // Literals
     /// Integer literals
@@ -136,7 +138,7 @@ impl<'a> Iterator for Scanner<'a> {
             let close_index = self.text.find("*/");
             if close_index.is_none() {
                 return Some(Token {
-                    kind: TokenType::Error(self.text.to_owned()),
+                    kind: TokenKind::Error(self.text.to_owned()),
                     line: self.current_line,
                     column: self.current_column,
                 });
