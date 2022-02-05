@@ -1,13 +1,13 @@
 #[derive(Debug, Eq, PartialEq)]
-pub struct Token {
-    pub kind: TokenKind,
+pub struct Token<'a> {
+    pub kind: TokenKind<'a>,
     line: u32,
     column: u32,
 }
 
 /// Represents terminal tokens.
 #[derive(Debug, Eq, PartialEq)]
-pub enum TokenKind {
+pub enum TokenKind<'a> {
     // Operators
     /// "+"
     Plus,
@@ -51,7 +51,7 @@ pub enum TokenKind {
     Char(char),
 
     /// Identifiers like "var_name" or "funcName123"
-    Identifier(String),
+    Identifier(&'a str),
 
     // Keywords
     /// "var"
@@ -102,49 +102,96 @@ pub enum TokenKind {
     ClosingSquare,
 
     /// Errors
-    Error(String),
+    Error(&'a str),
 }
 
 pub struct Scanner<'a> {
     text: &'a str,
-    current_line: u32,
-    current_column: u32,
+    line: u32,
+    column: u32,
 }
 
 impl<'a> Scanner<'a> {
     pub fn new(text: &'a str) -> Self {
         Self {
             text,
-            current_line: 0,
-            current_column: 0,
+            line: 0,
+            column: 0,
         }
     }
 }
 
 impl<'a> Iterator for Scanner<'a> {
-    type Item = Token;
+    type Item = Token<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // Remove single line comments
-        while self.text.starts_with("//") {
-            let line_index = self.text.find('\n')?;
-            self.text = &self.text[line_index + 1..];
-
-            self.current_line += 1;
+        if self.text.is_empty() {
+            return None;
         }
 
-        // Remove multiline comments
-        while self.text.starts_with("/*") {
-            let close_index = self.text.find("*/");
-            if close_index.is_none() {
-                return Some(Token {
-                    kind: TokenKind::Error(self.text.to_owned()),
-                    line: self.current_line,
-                    column: self.current_column,
-                });
+        loop {
+            if self.text.starts_with(char::is_whitespace) {
+                // Skip whitespace characters
+
+                let c = self.text.chars().next().unwrap();
+                if c == '\n' {
+                    self.line += 1;
+                    self.column = 0;
+                } else {
+                    self.column += c.len_utf8() as u32;
+                }
+                self.text = &self.text[c.len_utf8()..];
+            } else if self.text.starts_with("//") {
+                // Skip single line comments
+
+                let line_index = self.text.find('\n')?;
+                self.line += 1;
+                self.column = 0;
+                self.text = &self.text[line_index..];
+            } else if self.text.starts_with("/*") {
+                match self.text.find("*/") {
+                    Some(close_index) => {
+                        // Remove multi-line comments
+
+                        for c in self.text[..close_index + 2].chars() {
+                            if c == '\n' {
+                                self.line += 1;
+                                self.column = 0;
+                            } else {
+                                self.column += c.len_utf8() as u32;
+                            }
+                        }
+                        self.text = &self.text[close_index + 2..];
+                    }
+                    None => {
+                        // Return an error for unclosed multi-line comments
+
+                        let err = Token {
+                            kind: TokenKind::Error(self.text),
+                            line: self.line,
+                            column: self.column,
+                        };
+
+                        // Skip the rest of the text
+                        for c in self.text.chars() {
+                            if c == '\n' {
+                                self.line += 1;
+                                self.column = 0;
+                            } else {
+                                self.column += c.len_utf8() as u32;
+                            }
+                        }
+                        self.text = "";
+
+                        return Some(err);
+                    }
+                }
+            } else {
+                break;
             }
-            self.text = &self.text[close_index.unwrap() + 2..];
         }
+
+        // TODO: tokenize non-whitespace/comments
 
         None
     }
