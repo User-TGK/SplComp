@@ -171,4 +171,17 @@ mod test {
         let mut scanner = Scanner::new(multiline_comment);
         assert_eq!(scanner.next(), None);
     }
+
+    #[test]
+    fn test_remove_broken_multi_line_comment() {
+        let broken_comment = r"/*
+        This is a broken comment";
+
+        let mut scanner = Scanner::new(broken_comment);
+        assert_eq!(scanner.next(), Some(Token {
+            kind: TokenKind::Error(broken_comment),
+            line: 0,
+            column: 0,
+        }));
+    }
 }
