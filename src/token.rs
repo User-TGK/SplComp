@@ -27,12 +27,14 @@ impl Token {
             // Ge before Gt
             TokenKind::Ge,
             TokenKind::Gt,
+            // Equals before Assignment
             TokenKind::Equals,
             TokenKind::NotEquals,
             TokenKind::And,
             TokenKind::Or,
             TokenKind::Cons,
             TokenKind::Not,
+            TokenKind::Assignment,
             TokenKind::Bool(bool::default()),
             TokenKind::Char(char::default()),
             TokenKind::Var,
@@ -96,6 +98,8 @@ pub enum TokenKind {
     Cons,
     /// "!"
     Not,
+    /// "="
+    Assignment,
 
     // Literals
     /// Integer literals
@@ -104,7 +108,6 @@ pub enum TokenKind {
     Bool(bool),
     /// Character literals like "'a'"
     Char(char),
-
     /// Identifiers like "var_name" or "funcName123"
     Identifier(String),
 
@@ -177,6 +180,7 @@ impl TokenKind {
             Self::Ge => "Ge",
             Self::NotEquals => "Ne",
             Self::And => "An",
+            Self::Assignment => "As",
             Self::Or => "Or",
             Self::Cons => "Co",
             Self::Not => "No",
@@ -229,6 +233,7 @@ impl TokenKind {
             Self::Or => Some(r"\|\|"),
             Self::Cons => Some(r":"),
             Self::Not => Some(r"!"),
+            Self::Assignment => Some(r"="),
             Self::Integer(_) => Some(r"[-]?([0-9])+"),
             Self::Bool(_) => Some(r"True|False"),
             Self::Char(_) => Some(r"'[0-9a-zA-Z.\[\]]'"),

@@ -4,10 +4,16 @@ use crate::token::{Token, TokenKind};
 use regex::Regex;
 
 pub struct Scanner<'a> {
+    /// Reference to the string contents we are parsing.
     text: &'a str,
+    /// The current line used for processing.
     line: usize,
+    /// The current column used for processing.
     column: usize,
+    /// Contains the regular expression by which tokens are recognized from the input.
     regex: Regex,
+    /// Tracks whether the previous returned token was an integer.
+    last_token_was_int: bool,
 }
 
 impl<'a> Scanner<'a> {
@@ -23,6 +29,7 @@ impl<'a> Scanner<'a> {
             line: 0,
             column: 0,
             regex: Regex::new(&regex).unwrap(),
+            last_token_was_int: false,
         }
     }
 
@@ -36,6 +43,20 @@ impl<'a> Scanner<'a> {
             .match_indices('\n')
             .map(|x| x.0)
             .collect()
+    }
+
+    /// Function that updates the current line and column based on the new index
+    /// the text string will be sliced into.
+    fn update_line_column_for_new_index(&mut self, new_index: usize) {
+        let newline_occurences = self.newline_occurences(new_index);
+        let amount_of_newlines = newline_occurences.len();
+
+        if amount_of_newlines == 0 {
+            self.column += new_index;
+        } else {
+            self.line += amount_of_newlines;
+            self.column = new_index - newline_occurences[amount_of_newlines - 1] - 1;
+        }
     }
 }
 
@@ -117,6 +138,8 @@ impl<'a> Iterator for Scanner<'a> {
                         let illegal_token = self.text[0..m.start()].to_string();
                         let e = Some(self.error_token(ErrorKind::IllegalToken(illegal_token)));
 
+                        self.update_line_column_for_new_index(m.start());
+                        
                         self.text = &self.text[m.start()..];
 
                         return e;
@@ -127,24 +150,36 @@ impl<'a> Iterator for Scanner<'a> {
                     // Update contents for token kinds with content.
                     if token.kind == TokenKind::Integer(i64::default()) {
                         // Reconsider unwrap.
-                        token.kind = TokenKind::Integer(m.as_str().parse().unwrap());
-                    } else if token.kind == TokenKind::Bool(bool::default()) {
+                        let value = m.as_str().parse().unwrap();
+
+                        if self.last_token_was_int && value < 0 {
+                            self.last_token_was_int = false;
+
+                            token.kind = TokenKind::Minus;
+
+                            let sign_length = self.text.chars().next().unwrap().len_utf8();
+                            self.text = &self.text[sign_length..];
+                            self.column += sign_length;
+
+                            return Some(token);
+                        }
+
+                        token.kind = TokenKind::Integer(value);
+                        self.last_token_was_int = true;
+                    } else {
+                        self.last_token_was_int = false;
+                    }
+
+                    if token.kind == TokenKind::Bool(bool::default()) {
                         token.kind = TokenKind::Bool(m.as_str() == "True");
                     } else if token.kind == TokenKind::Char(char::default()) {
+                        // TODO: deal with ASCII if required..?
                         token.kind = TokenKind::Char(m.as_str().as_bytes()[1] as char);
                     } else if token.kind == TokenKind::Identifier(String::default()) {
                         token.kind = TokenKind::Identifier(m.as_str().to_string());
                     }
 
-                    let newline_occurences = self.newline_occurences(m.end());
-                    let amount_of_newlines = newline_occurences.len();
-
-                    if amount_of_newlines == 0 {
-                        self.column += m.end();
-                    } else {
-                        self.line += amount_of_newlines;
-                        self.column = m.end() - newline_occurences[amount_of_newlines - 1];
-                    }
+                    self.update_line_column_for_new_index(m.end());
 
                     self.text = &self.text[m.end()..];
 
@@ -277,6 +312,11 @@ mod test {
     #[test]
     fn test_not() {
         single_token_test_helper("!", TokenKind::Not);
+    }
+
+    #[test]
+    fn test_assignment() {
+        single_token_test_helper("=", TokenKind::Assignment);
     }
 
     #[test]
@@ -419,6 +459,28 @@ mod test {
     }
 
     #[test]
+    fn test_integer_evaluation_loop() {
+        let text = r"1-2-3;";
+        let mut scanner = Scanner::new(text);
+
+        assert_eq!(
+            scanner.next(),
+            Some(Token::new(TokenKind::Integer(1), 0, 0))
+        );
+        assert_eq!(scanner.next(), Some(Token::new(TokenKind::Minus, 0, 1)));
+        assert_eq!(
+            scanner.next(),
+            Some(Token::new(TokenKind::Integer(2), 0, 2))
+        );
+        assert_eq!(scanner.next(), Some(Token::new(TokenKind::Minus, 0, 3)));
+        assert_eq!(
+            scanner.next(),
+            Some(Token::new(TokenKind::Integer(3), 0, 4))
+        );
+        assert_eq!(scanner.next(), Some(Token::new(TokenKind::Semicolon, 0, 5)));
+    }
+
+    #[test]
     fn test_while_loop() {
         let text = r"  // Some commentary on this code...
                             while(month < 12) {}";
@@ -455,5 +517,30 @@ mod test {
             scanner.next(),
             Some(Token::new(TokenKind::ClosingBrace, 1, 47))
         );
+    }
+
+    #[test]
+    pub fn test_correct_line_column_updates() {
+        let text = "{\n_illegal\n}";
+
+        let mut scanner = Scanner::new(text);
+
+        assert_eq!(scanner.line, 0);
+        assert_eq!(scanner.column, 0);
+
+        scanner.update_line_column_for_new_index(2);
+        scanner.text = &scanner.text[2..];
+        assert_eq!(scanner.line, 1);
+        assert_eq!(scanner.column, 0);
+
+        scanner.update_line_column_for_new_index(2);
+        scanner.text = &scanner.text[2..];
+        assert_eq!(scanner.line, 1);
+        assert_eq!(scanner.column, 2);
+
+        scanner.update_line_column_for_new_index(7);
+        scanner.text = &scanner.text[7..];
+        assert_eq!(scanner.line, 2);
+        assert_eq!(scanner.column, 0);
     }
 }
