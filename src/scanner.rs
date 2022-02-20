@@ -12,8 +12,6 @@ pub struct Scanner<'a> {
     column: usize,
     /// Contains the regular expression by which tokens are recognized from the input.
     regex: Regex,
-    /// Tracks whether the previous returned token was an integer.
-    last_token_was_int: bool,
 }
 
 impl<'a> Scanner<'a> {
@@ -29,12 +27,11 @@ impl<'a> Scanner<'a> {
             line: 0,
             column: 0,
             regex: Regex::new(&regex).unwrap(),
-            last_token_was_int: false,
         }
     }
 
     /// Constructs a new error token from an error kind.
-    pub fn error_token(&self, kind: ErrorKind) -> Token {
+    pub fn error_token(&self, kind: ErrorKind) -> Token<'a> {
         Token::new(TokenKind::Error(kind), self.line, self.column)
     }
 
@@ -61,7 +58,7 @@ impl<'a> Scanner<'a> {
 }
 
 impl<'a> Iterator for Scanner<'a> {
-    type Item = Token;
+    type Item = Token<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.text.is_empty() {
@@ -147,36 +144,16 @@ impl<'a> Iterator for Scanner<'a> {
 
                     let mut token = Token::new(token_kind, self.line, self.column);
 
-                    // Update contents for token kinds with content.
                     if token.kind == TokenKind::Integer(i64::default()) {
-                        // Reconsider unwrap.
-                        let value = m.as_str().parse().unwrap();
-
-                        if self.last_token_was_int && value < 0 {
-                            self.last_token_was_int = false;
-
-                            token.kind = TokenKind::Minus;
-
-                            let sign_length = self.text.chars().next().unwrap().len_utf8();
-                            self.text = &self.text[sign_length..];
-                            self.column += sign_length;
-
-                            return Some(token);
-                        }
-
-                        token.kind = TokenKind::Integer(value);
-                        self.last_token_was_int = true;
-                    } else {
-                        self.last_token_was_int = false;
+                        token.kind = TokenKind::Integer(m.as_str().parse().unwrap());
                     }
-
-                    if token.kind == TokenKind::Bool(bool::default()) {
+                    else if token.kind == TokenKind::Bool(bool::default()) {
                         token.kind = TokenKind::Bool(m.as_str() == "True");
                     } else if token.kind == TokenKind::Char(char::default()) {
                         // TODO: deal with ASCII if required..?
                         token.kind = TokenKind::Char(m.as_str().as_bytes()[1] as char);
-                    } else if token.kind == TokenKind::Identifier(String::default()) {
-                        token.kind = TokenKind::Identifier(m.as_str().to_string());
+                    } else if token.kind == TokenKind::Identifier(&"") {
+                        token.kind = TokenKind::Identifier(m.as_str());
                     }
 
                     self.update_line_column_for_new_index(m.end());
@@ -320,11 +297,6 @@ mod test {
     }
 
     #[test]
-    fn test_negative_integer() {
-        single_token_test_helper("-562", TokenKind::Integer(-562));
-    }
-
-    #[test]
     fn test_positive_integer() {
         single_token_test_helper("562", TokenKind::Integer(562));
     }
@@ -347,15 +319,15 @@ mod test {
     #[test]
     fn test_identifier() {
         single_token_test_helper(
-            "func_name",
-            TokenKind::Identifier(String::from("func_name")),
+            &"func_name",
+            TokenKind::Identifier("func_name"),
         );
         single_token_test_helper(
             "ifibutnotif",
-            TokenKind::Identifier(String::from("ifibutnotif")),
+            TokenKind::Identifier("ifibutnotif"),
         );
 
-        single_token_test_helper("if1", TokenKind::Identifier(String::from("if1")));
+        single_token_test_helper("if1", TokenKind::Identifier("if1"));
     }
 
     #[test]
@@ -416,6 +388,11 @@ mod test {
     #[test]
     fn test_snd() {
         single_token_test_helper(".snd", TokenKind::Snd);
+    }
+
+    #[test]
+    fn test_empty_list() {
+        single_token_test_helper("[]", TokenKind::EmptyList);
     }
 
     #[test]
@@ -495,7 +472,7 @@ mod test {
         assert_eq!(
             scanner.next(),
             Some(Token::new(
-                TokenKind::Identifier(String::from("month")),
+                TokenKind::Identifier("month"),
                 1,
                 34
             ))
