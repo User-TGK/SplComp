@@ -1,21 +1,131 @@
 use crate::error::ErrorKind;
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct Token {
-    pub kind: TokenKind,
+use nom::{InputIter, InputLength, InputTake, Needed, Slice};
+
+use std::iter::Enumerate;
+use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Tokens<'a> {
+    inner: &'a [Token<'a>],
+}
+
+impl<'a> Tokens<'a> {
+    pub fn new(tokens: &'a [Token<'a>]) -> Self {
+        Self { inner: tokens }
+    }
+
+    pub fn inner(&self) -> &'a [Token<'a>] {
+        self.inner
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+}
+
+impl<'a> InputLength for Tokens<'a> {
+    fn input_len(&self) -> usize {
+        self.inner.len()
+    }
+}
+
+impl<'a> InputTake for Tokens<'a> {
+    fn take(&self, count: usize) -> Self {
+        println!("Called take with count {}", count);
+        Tokens {
+            inner: &self.inner[0..count],
+        }
+    }
+
+    fn take_split(&self, count: usize) -> (Self, Self) {
+        let (p, s) = self.inner.split_at(count);
+
+        (Self { inner: s }, Self { inner: p })
+    }
+}
+
+impl<'a> Slice<Range<usize>> for Tokens<'a> {
+    fn slice(&self, range: Range<usize>) -> Self {
+        Tokens {
+            inner: self.inner.slice(range.clone()),
+        }
+    }
+}
+
+impl<'a> Slice<RangeTo<usize>> for Tokens<'a> {
+    fn slice(&self, range: RangeTo<usize>) -> Self {
+        self.slice(0..range.end)
+    }
+}
+
+impl<'a> Slice<RangeFrom<usize>> for Tokens<'a> {
+    fn slice(&self, range: RangeFrom<usize>) -> Self {
+        self.slice(range.start..(self.inner.len()))
+    }
+}
+
+impl<'a> Slice<RangeFull> for Tokens<'a> {
+    fn slice(&self, _: RangeFull) -> Self {
+        Tokens { inner: self.inner }
+    }
+}
+
+impl<'a> InputIter for Tokens<'a> {
+    type Item = &'a Token<'a>;
+    type Iter = Enumerate<::std::slice::Iter<'a, Token<'a>>>;
+    type IterElem = ::std::slice::Iter<'a, Token<'a>>;
+
+    fn iter_indices(&self) -> Enumerate<::std::slice::Iter<'a, Token<'a>>> {
+        self.inner.iter().enumerate()
+    }
+
+    fn iter_elements(&self) -> ::std::slice::Iter<'a, Token<'a>> {
+        self.inner.iter()
+    }
+
+    fn position<P>(&self, predicate: P) -> Option<usize>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        self.inner.iter().position(predicate)
+    }
+
+    fn slice_index(&self, count: usize) -> Result<usize, Needed> {
+        if self.inner.len() >= count {
+            Ok(count)
+        } else {
+            Err(Needed::Unknown)
+        }
+    }
+}
+
+impl<'a, Idx> std::ops::Index<Idx> for Tokens<'a>
+where
+    Idx: std::slice::SliceIndex<[Token<'a>]>,
+{
+    type Output = Idx::Output;
+
+    fn index(&self, index: Idx) -> &Self::Output {
+        &self.inner[index]
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Token<'a> {
+    pub kind: TokenKind<'a>,
     pub line: usize,
     pub column: usize,
 }
 
-impl Token {
-    pub fn new(kind: TokenKind, line: usize, column: usize) -> Self {
+impl<'a> Token<'a> {
+    pub fn new(kind: TokenKind<'a>, line: usize, column: usize) -> Self {
         Self { kind, line, column }
     }
 
-    pub fn lexical_analysis_order() -> impl Iterator<Item = TokenKind> {
+    pub fn lexical_analysis_order() -> impl Iterator<Item = TokenKind<'a>> {
         [
             TokenKind::Plus,
-            // Integer must be before Minus
             TokenKind::Integer(i64::default()),
             TokenKind::Minus,
             TokenKind::Divide,
@@ -49,8 +159,10 @@ impl Token {
             TokenKind::Tl,
             TokenKind::Fst,
             TokenKind::Snd,
+            // EmptyList before OpeningBrace
+            TokenKind::EmptyList,
             // Identifier after keywords starting with an alpha character
-            TokenKind::Identifier(String::default()),
+            TokenKind::Identifier(""),
             TokenKind::Semicolon,
             TokenKind::Comma,
             TokenKind::OpeningParen,
@@ -65,8 +177,8 @@ impl Token {
 }
 
 /// Represents terminal tokens.
-#[derive(Debug, Eq, PartialEq)]
-pub enum TokenKind {
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TokenKind<'a> {
     // Operators
     /// "+"
     Plus,
@@ -109,7 +221,7 @@ pub enum TokenKind {
     /// Character literals like "'a'"
     Char(char),
     /// Identifiers like "var_name" or "funcName123"
-    Identifier(String),
+    Identifier(&'a str),
 
     // Keywords
     /// "var"
@@ -141,6 +253,9 @@ pub enum TokenKind {
     /// ".snd"
     Snd,
 
+    // "[]"
+    EmptyList,
+
     // Symbols
     /// ";"
     Semicolon,
@@ -163,7 +278,7 @@ pub enum TokenKind {
     Error(ErrorKind),
 }
 
-impl TokenKind {
+impl<'a> TokenKind<'a> {
     /// Unique names for each token kind, used to construct named regular expression
     /// groups for the lexical analysis.
     pub fn name(&self) -> &'static str {
@@ -200,6 +315,7 @@ impl TokenKind {
             Self::Tl => "Tl",
             Self::Fst => "Fs",
             Self::Snd => "Snd",
+            Self::EmptyList => "Em",
             Self::Semicolon => "Se",
             Self::Comma => "Cm",
             Self::OpeningParen => "Op",
@@ -234,7 +350,7 @@ impl TokenKind {
             Self::Cons => Some(r":"),
             Self::Not => Some(r"!"),
             Self::Assignment => Some(r"="),
-            Self::Integer(_) => Some(r"[-]?([0-9])+"),
+            Self::Integer(_) => Some(r"([0-9])+"),
             Self::Bool(_) => Some(r"True|False"),
             Self::Char(_) => Some(r"'[0-9a-zA-Z.\[\]]'"),
             Self::Identifier(_) => Some(r"[[:alpha:]](_|[[:alnum:]])*"),
@@ -250,6 +366,7 @@ impl TokenKind {
             Self::Tl => Some(r"\.tl"),
             Self::Fst => Some(r"\.fst"),
             Self::Snd => Some(r"\.snd"),
+            Self::EmptyList => Some(r"\[\]"),
             Self::Semicolon => Some(r";"),
             Self::Comma => Some(r","),
             Self::OpeningParen => Some(r"\("),

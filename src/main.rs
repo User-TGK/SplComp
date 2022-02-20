@@ -2,6 +2,7 @@ use std::error::Error;
 use std::{env, fs};
 
 mod error;
+mod parser;
 mod scanner;
 mod token;
 
