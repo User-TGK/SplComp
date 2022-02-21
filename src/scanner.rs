@@ -136,7 +136,7 @@ impl<'a> Iterator for Scanner<'a> {
                         let e = Some(self.error_token(ErrorKind::IllegalToken(illegal_token)));
 
                         self.update_line_column_for_new_index(m.start());
-                        
+
                         self.text = &self.text[m.start()..];
 
                         return e;
@@ -146,8 +146,7 @@ impl<'a> Iterator for Scanner<'a> {
 
                     if token.kind == TokenKind::Integer(i64::default()) {
                         token.kind = TokenKind::Integer(m.as_str().parse().unwrap());
-                    }
-                    else if token.kind == TokenKind::Bool(bool::default()) {
+                    } else if token.kind == TokenKind::Bool(bool::default()) {
                         token.kind = TokenKind::Bool(m.as_str() == "True");
                     } else if token.kind == TokenKind::Char(char::default()) {
                         // TODO: deal with ASCII if required..?
@@ -328,14 +327,8 @@ mod test {
 
     #[test]
     fn test_identifier() {
-        single_token_test_helper(
-            &"func_name",
-            TokenKind::Identifier("func_name"),
-        );
-        single_token_test_helper(
-            "ifibutnotif",
-            TokenKind::Identifier("ifibutnotif"),
-        );
+        single_token_test_helper(&"func_name", TokenKind::Identifier("func_name"));
+        single_token_test_helper("ifibutnotif", TokenKind::Identifier("ifibutnotif"));
 
         single_token_test_helper("if1", TokenKind::Identifier("if1"));
     }
@@ -486,11 +479,7 @@ mod test {
         );
         assert_eq!(
             scanner.next(),
-            Some(Token::new(
-                TokenKind::Identifier("month"),
-                1,
-                34
-            ))
+            Some(Token::new(TokenKind::Identifier("month"), 1, 34))
         );
         assert_eq!(scanner.next(), Some(Token::new(TokenKind::Lt, 1, 40)));
         assert_eq!(

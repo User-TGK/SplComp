@@ -7,10 +7,10 @@ use ast::*;
 
 use nom::branch::alt;
 use nom::bytes::complete::take;
-use nom::combinator::{map, verify, opt};
+use nom::combinator::{map, opt, verify};
 use nom::error::{Error, ErrorKind};
 use nom::multi::{fold_many0, many0, many1, many_till, separated_list0};
-use nom::sequence::{tuple, delimited, pair, separated_pair, preceded, terminated};
+use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
 use nom::{Err, IResult};
 
 macro_rules! token_parser (
@@ -87,13 +87,13 @@ token_parser!(tl_parser, TokenKind::Tl);
 token_parser!(fst_parser, TokenKind::Fst);
 token_parser!(snd_parser, TokenKind::Snd);
 
-fn program_parser(tokens: Tokens) -> IResult<Tokens, Program> {
+pub fn program_parser(tokens: Tokens) -> IResult<Tokens, Program> {
     map(
         many1(alt((
             map(var_decl_parser, Decl::VarDecl),
             map(fun_decl_parser, Decl::FunDecl),
         ))),
-        Program
+        Program,
     )(tokens)
 }
 
@@ -105,7 +105,7 @@ fn tuple_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
             separated_pair(type_parser, comma_parser, type_parser),
             closing_paren_parser,
         ),
-        |(t1, t2)| Type::Tuple(Box::new(t1), Box::new(t2))
+        |(t1, t2)| Type::Tuple(Box::new(t1), Box::new(t2)),
     )(tokens)
 }
 
@@ -113,7 +113,7 @@ fn tuple_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
 fn array_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
     map(
         delimited(opening_square_parser, type_parser, closing_square_parser),
-        |t| Type::Array(Box::new(t))
+        |t| Type::Array(Box::new(t)),
     )(tokens)
 }
 
@@ -131,10 +131,7 @@ fn type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
 
 /// Parses the type of a variable declaration, either "var" or a type.
 fn var_decl_type_parser(tokens: Tokens) -> IResult<Tokens, Option<Type>> {
-    alt((
-        map(var_parser, |_| None),
-        map(type_parser, Some),
-    ))(tokens)
+    alt((map(var_parser, |_| None), map(type_parser, Some)))(tokens)
 }
 
 /// Parses a variable declaration.
@@ -151,14 +148,14 @@ fn var_decl_parser(tokens: Tokens) -> IResult<Tokens, VarDecl> {
             var_type,
             name,
             value,
-        }
+        },
     )(tokens)
 }
 
 fn fun_ret_type_parser(tokens: Tokens) -> IResult<Tokens, ReturnType> {
     alt((
         map(void_type_parser, |_| ReturnType::Void),
-        map(type_parser, ReturnType::Type)
+        map(type_parser, ReturnType::Type),
     ))(tokens)
 }
 
@@ -173,7 +170,7 @@ fn fun_decl_type_parser(tokens: Tokens) -> IResult<Tokens, Option<FunType>> {
         |(_, param_types, _, return_type)| FunType {
             param_types,
             return_type,
-        }
+        },
     ))(tokens)
 }
 
@@ -190,10 +187,7 @@ fn fun_decl_parser(tokens: Tokens) -> IResult<Tokens, FunDecl> {
             fun_decl_type_parser,
             delimited(
                 opening_brace_parser,
-                pair(
-                    many0(var_decl_parser),
-                    many1(statement_parser),
-                ),
+                pair(many0(var_decl_parser), many1(statement_parser)),
                 closing_brace_parser,
             ),
         )),
@@ -203,7 +197,7 @@ fn fun_decl_parser(tokens: Tokens) -> IResult<Tokens, FunDecl> {
             fun_type,
             var_decls,
             statements,
-        }
+        },
     )(tokens)
 }
 
@@ -212,17 +206,27 @@ fn if_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
         tuple((
             if_parser,
             delimited(opening_paren_parser, expr_parser, closing_paren_parser),
-            delimited(opening_brace_parser, many0(statement_parser), closing_brace_parser),
+            delimited(
+                opening_brace_parser,
+                many0(statement_parser),
+                closing_brace_parser,
+            ),
             opt(preceded(
                 else_parser,
-                delimited(opening_brace_parser, many0(statement_parser), closing_brace_parser)
+                delimited(
+                    opening_brace_parser,
+                    many0(statement_parser),
+                    closing_brace_parser,
+                ),
             )),
         )),
-        |(_, cond, if_true, if_false)| Statement::If(If {
-            cond,
-            if_true,
-            if_false: if_false.unwrap_or_else(Vec::new),
-        })
+        |(_, cond, if_true, if_false)| {
+            Statement::If(If {
+                cond,
+                if_true,
+                if_false: if_false.unwrap_or_else(Vec::new),
+            })
+        },
     )(tokens)
 }
 
@@ -232,13 +236,14 @@ fn while_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
             while_parser,
             pair(
                 delimited(opening_paren_parser, expr_parser, closing_paren_parser),
-                delimited(opening_brace_parser, many0(statement_parser), closing_brace_parser),
-            )
+                delimited(
+                    opening_brace_parser,
+                    many0(statement_parser),
+                    closing_brace_parser,
+                ),
+            ),
         ),
-        |(cond, body)| Statement::While(While {
-            cond,
-            body,
-        })
+        |(cond, body)| Statement::While(While { cond, body }),
     )(tokens)
 }
 
@@ -250,24 +255,26 @@ fn assign_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
             expr_parser,
             semicolon_parser,
         )),
-        |((id, fields), _, value, _)| Statement::Assign(Assign {
-            target: Variable::new(id, fields),
-            value,
-        })
+        |((id, fields), _, value, _)| {
+            Statement::Assign(Assign {
+                target: Variable::new(id, fields),
+                value,
+            })
+        },
     )(tokens)
 }
 
 fn fun_call_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
     map(
         terminated(fun_call_parser, semicolon_parser),
-        Statement::FunCall
+        Statement::FunCall,
     )(tokens)
 }
 
 fn return_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
     map(
         delimited(return_parser, opt(expr_parser), semicolon_parser),
-        Statement::Return
+        Statement::Return,
     )(tokens)
 }
 
@@ -448,11 +455,7 @@ fn atom_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
             |a| Expr::Atom(a),
         ),
         // '(' expr ')'
-        delimited(
-            opening_paren_parser,
-            expr_parser,
-            closing_paren_parser,
-        ),
+        delimited(opening_paren_parser, expr_parser, closing_paren_parser),
     ))(tokens)
 }
 

@@ -1,13 +1,8 @@
 use std::error::Error;
 use std::{env, fs};
 
-mod error;
-mod parser;
-mod scanner;
-mod token;
-
-use scanner::Scanner;
-use token::Token;
+use group3::scanner::Scanner;
+use group3::token::Token;
 
 pub fn main() -> Result<(), Box<dyn Error>> {
     let mut args = env::args();
