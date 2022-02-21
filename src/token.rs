@@ -125,6 +125,9 @@ impl<'a> Token<'a> {
 
     pub fn lexical_analysis_order() -> impl Iterator<Item = TokenKind<'a>> {
         [
+            // Composite symbol tokens before similar single-symbol tokens
+            TokenKind::DoubleColon,
+            TokenKind::RightArrow,
             TokenKind::Plus,
             TokenKind::Integer(i64::default()),
             TokenKind::Minus,
@@ -155,6 +158,7 @@ impl<'a> Token<'a> {
             TokenKind::IntType,
             TokenKind::BoolType,
             TokenKind::CharType,
+            TokenKind::VoidType,
             TokenKind::Hd,
             TokenKind::Tl,
             TokenKind::Fst,
@@ -243,6 +247,15 @@ pub enum TokenKind<'a> {
     /// "Char"
     CharType,
 
+    /// "::"
+    DoubleColon,
+
+    /// "->"
+    RightArrow,
+
+    /// "Void"
+    VoidType,
+
     // Field access
     /// ".hd"
     Hd,
@@ -311,6 +324,9 @@ impl<'a> TokenKind<'a> {
             Self::IntType => "It",
             Self::BoolType => "Bt",
             Self::CharType => "Ct",
+            Self::VoidType => "Vt",
+            Self::DoubleColon => "Ft",
+            Self::RightArrow => "Ra",
             Self::Hd => "Hd",
             Self::Tl => "Tl",
             Self::Fst => "Fs",
@@ -362,6 +378,9 @@ impl<'a> TokenKind<'a> {
             Self::IntType => Some(r"Int\b"),
             Self::BoolType => Some(r"Bool\b"),
             Self::CharType => Some(r"Char\b"),
+            Self::DoubleColon => Some(r"::"),
+            Self::RightArrow => Some("->"),
+            Self::VoidType => Some(r"Void\b"),
             Self::Hd => Some(r"\.hd"),
             Self::Tl => Some(r"\.tl"),
             Self::Fst => Some(r"\.fst"),

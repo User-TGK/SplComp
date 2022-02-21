@@ -1,14 +1,16 @@
 mod ast;
+#[cfg(test)]
+mod test;
 
 use crate::token::*;
 use ast::*;
 
 use nom::branch::alt;
 use nom::bytes::complete::take;
-use nom::combinator::{map, verify};
+use nom::combinator::{map, verify, opt};
 use nom::error::{Error, ErrorKind};
-use nom::multi::{fold_many0, many0, many_till, separated_list0};
-use nom::sequence::{tuple, delimited};
+use nom::multi::{fold_many0, many0, many1, many_till, separated_list0};
+use nom::sequence::{tuple, delimited, pair, separated_pair, preceded, terminated};
 use nom::{Err, IResult};
 
 macro_rules! token_parser (
@@ -21,8 +23,28 @@ macro_rules! token_parser (
     )
 );
 
+token_parser!(var_parser, TokenKind::Var);
+token_parser!(assignment_parser, TokenKind::Assignment);
+token_parser!(semicolon_parser, TokenKind::Semicolon);
+token_parser!(opening_brace_parser, TokenKind::OpeningBrace);
+token_parser!(closing_brace_parser, TokenKind::ClosingBrace);
+
+token_parser!(double_colon_parser, TokenKind::DoubleColon);
+token_parser!(right_arrow_parser, TokenKind::RightArrow);
+
+token_parser!(int_type_parser, TokenKind::IntType);
+token_parser!(bool_type_parser, TokenKind::BoolType);
+token_parser!(char_type_parser, TokenKind::CharType);
+
+token_parser!(void_type_parser, TokenKind::VoidType);
+
+token_parser!(opening_square_parser, TokenKind::OpeningSquare);
+token_parser!(closing_square_parser, TokenKind::ClosingSquare);
+
 token_parser!(if_parser, TokenKind::If);
+token_parser!(else_parser, TokenKind::Else);
 token_parser!(while_parser, TokenKind::While);
+token_parser!(return_parser, TokenKind::Return);
 
 // Non-terminal Disjun
 token_parser!(or_parser, TokenKind::Or);
@@ -64,6 +86,200 @@ token_parser!(hd_parser, TokenKind::Hd);
 token_parser!(tl_parser, TokenKind::Tl);
 token_parser!(fst_parser, TokenKind::Fst);
 token_parser!(snd_parser, TokenKind::Snd);
+
+fn program_parser(tokens: Tokens) -> IResult<Tokens, Program> {
+    map(
+        many1(alt((
+            map(var_decl_parser, Decl::VarDecl),
+            map(fun_decl_parser, Decl::FunDecl),
+        ))),
+        Program
+    )(tokens)
+}
+
+/// Parses a tuple type, ie. "(" type "," type ")".
+fn tuple_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
+    map(
+        delimited(
+            opening_paren_parser,
+            separated_pair(type_parser, comma_parser, type_parser),
+            closing_paren_parser,
+        ),
+        |(t1, t2)| Type::Tuple(Box::new(t1), Box::new(t2))
+    )(tokens)
+}
+
+/// Parses an array type, ie. "[" type "]".
+fn array_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
+    map(
+        delimited(opening_square_parser, type_parser, closing_square_parser),
+        |t| Type::Array(Box::new(t))
+    )(tokens)
+}
+
+/// Parses a type.
+fn type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
+    alt((
+        map(int_type_parser, |_| Type::Int),
+        map(bool_type_parser, |_| Type::Bool),
+        map(char_type_parser, |_| Type::Char),
+        tuple_type_parser,
+        array_type_parser,
+        map(identifier_parser, Type::Generic),
+    ))(tokens)
+}
+
+/// Parses the type of a variable declaration, either "var" or a type.
+fn var_decl_type_parser(tokens: Tokens) -> IResult<Tokens, Option<Type>> {
+    alt((
+        map(var_parser, |_| None),
+        map(type_parser, Some),
+    ))(tokens)
+}
+
+/// Parses a variable declaration.
+fn var_decl_parser(tokens: Tokens) -> IResult<Tokens, VarDecl> {
+    map(
+        tuple((
+            var_decl_type_parser,
+            identifier_parser,
+            assignment_parser,
+            expr_parser,
+            semicolon_parser,
+        )),
+        |(var_type, name, _, value, _)| VarDecl {
+            var_type,
+            name,
+            value,
+        }
+    )(tokens)
+}
+
+fn fun_ret_type_parser(tokens: Tokens) -> IResult<Tokens, ReturnType> {
+    alt((
+        map(void_type_parser, |_| ReturnType::Void),
+        map(type_parser, ReturnType::Type)
+    ))(tokens)
+}
+
+fn fun_decl_type_parser(tokens: Tokens) -> IResult<Tokens, Option<FunType>> {
+    opt(map(
+        tuple((
+            double_colon_parser,
+            many0(type_parser),
+            right_arrow_parser,
+            fun_ret_type_parser,
+        )),
+        |(_, param_types, _, return_type)| FunType {
+            param_types,
+            return_type,
+        }
+    ))(tokens)
+}
+
+/// Parses a function declaration.
+fn fun_decl_parser(tokens: Tokens) -> IResult<Tokens, FunDecl> {
+    map(
+        tuple((
+            identifier_parser,
+            delimited(
+                opening_paren_parser,
+                separated_list0(comma_parser, identifier_parser),
+                closing_paren_parser,
+            ),
+            fun_decl_type_parser,
+            delimited(
+                opening_brace_parser,
+                pair(
+                    many0(var_decl_parser),
+                    many1(statement_parser),
+                ),
+                closing_brace_parser,
+            ),
+        )),
+        |(name, params, fun_type, (var_decls, statements))| FunDecl {
+            name,
+            params,
+            fun_type,
+            var_decls,
+            statements,
+        }
+    )(tokens)
+}
+
+fn if_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
+    map(
+        tuple((
+            if_parser,
+            delimited(opening_paren_parser, expr_parser, closing_paren_parser),
+            delimited(opening_brace_parser, many0(statement_parser), closing_brace_parser),
+            opt(preceded(
+                else_parser,
+                delimited(opening_brace_parser, many0(statement_parser), closing_brace_parser)
+            )),
+        )),
+        |(_, cond, if_true, if_false)| Statement::If(If {
+            cond,
+            if_true,
+            if_false: if_false.unwrap_or_else(Vec::new),
+        })
+    )(tokens)
+}
+
+fn while_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
+    map(
+        preceded(
+            while_parser,
+            pair(
+                delimited(opening_paren_parser, expr_parser, closing_paren_parser),
+                delimited(opening_brace_parser, many0(statement_parser), closing_brace_parser),
+            )
+        ),
+        |(cond, body)| Statement::While(While {
+            cond,
+            body,
+        })
+    )(tokens)
+}
+
+fn assign_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
+    map(
+        tuple((
+            pair(identifier_parser, field_parser),
+            assignment_parser,
+            expr_parser,
+            semicolon_parser,
+        )),
+        |((id, fields), _, value, _)| Statement::Assign(Assign {
+            target: Variable::new(id, fields),
+            value,
+        })
+    )(tokens)
+}
+
+fn fun_call_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
+    map(
+        terminated(fun_call_parser, semicolon_parser),
+        Statement::FunCall
+    )(tokens)
+}
+
+fn return_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
+    map(
+        delimited(return_parser, opt(expr_parser), semicolon_parser),
+        Statement::Return
+    )(tokens)
+}
+
+fn statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
+    alt((
+        if_statement_parser,
+        while_statement_parser,
+        assign_statement_parser,
+        return_statement_parser,
+        fun_call_statement_parser,
+    ))(tokens)
+}
 
 fn expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     disjun_expr_parser(tokens)
@@ -218,12 +434,12 @@ fn atom_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     alt((
         map(
             alt((
+                // FunCall
+                map(fun_call_parser, Atom::FunCall),
                 // id [Field]
                 variable_atom_parser,
                 // int | char | 'True' | 'False'
                 literal_atom_parser,
-                // FunCall
-                fun_call_parser,
                 // '[]'
                 map(empty_list_parser, |_| Atom::EmptyList),
                 // '(' Exp ',' Exp ')'
@@ -285,7 +501,7 @@ fn literal_atom_parser(tokens: Tokens) -> IResult<Tokens, Atom> {
     }
 }
 
-fn fun_call_parser(tokens: Tokens) -> IResult<Tokens, Atom> {
+fn fun_call_parser(tokens: Tokens) -> IResult<Tokens, FunCall> {
     map(
         tuple((
             identifier_parser,
@@ -293,7 +509,7 @@ fn fun_call_parser(tokens: Tokens) -> IResult<Tokens, Atom> {
             separated_list0(comma_parser, expr_parser),
             closing_paren_parser,
         )),
-        |(id, _, args, _)| Atom::FunCall(FunCall::new(id, args)),
+        |(id, _, args, _)| FunCall::new(id, args),
     )(tokens)
 }
 
@@ -308,270 +524,4 @@ fn tuple_atom_parser(tokens: Tokens) -> IResult<Tokens, Atom> {
         )),
         |(_, e1, _, e2, _)| Atom::Tuple(Box::new(e1), Box::new(e2)),
     )(tokens)
-}
-
-#[cfg(test)]
-mod test {
-    use crate::scanner::*;
-
-    use super::*;
-
-    macro_rules! boxed_int_literal (
-        ($value:expr) => (
-            Box::new(Expr::Atom(Atom::IntLiteral($value)))
-        )
-    );
-
-    #[test]
-    fn test_field_access() {
-        let tokens: Vec<Token> = Scanner::new(&"x.hd.tl.fst.snd").collect();
-        let tokens = Tokens::new(&tokens);
-
-        let r1 = expr_parser(tokens);
-        let t1 = Tokens::new(&[]);
-
-        let expected1 = Expr::Atom(Atom::Variable(Variable::new(
-            Id(String::from("x")),
-            vec![Field::Hd, Field::Tl, Field::Fst, Field::Snd],
-        )));
-
-        assert_eq!(r1, Ok((t1, expected1)));
-    }
-
-    #[test]
-    fn test_tuple_expression() {
-        let tokens: Vec<Token> = Scanner::new(&"(2 * (1 + 6), 8)").collect();
-        let tokens = Tokens::new(&tokens);
-
-        let r1 = expr_parser(tokens);
-        let t1 = Tokens::new(&[]);
-
-        let expected1 = Expr::Atom(Atom::Tuple(
-            Box::new(Expr::Mul(
-                boxed_int_literal!(2),
-                Box::new(Expr::Add(boxed_int_literal!(1), boxed_int_literal!(6))),
-            )),
-            boxed_int_literal!(8),
-        ));
-
-        assert_eq!(r1, Ok((t1, expected1)));
-    }
-
-    #[test]
-    fn test_parenthesized_expr_precedence() {
-        let tokens: Vec<Token> = Scanner::new(&"(2 + 6) / 4").collect();
-        let tokens = Tokens::new(&tokens);
-
-        let r1 = expr_parser(tokens);
-        let t1 = Tokens::new(&[]);
-
-        let expected1 = Expr::Div(
-            Box::new(Expr::Add(boxed_int_literal!(2), boxed_int_literal!(6))),
-            boxed_int_literal!(4),
-        );
-
-        assert_eq!(r1, Ok((t1, expected1)));
-    }
-
-    #[test]
-    fn test_disjun_expr_parser() {
-        let tokens: Vec<Token> = Scanner::new(&"1 <= 2 || 9 > 3 || 5 == 5").collect();
-        let tokens = Tokens::new(&tokens);
-
-        let r1 = disjun_expr_parser(tokens);
-        let t1 = Tokens::new(&[]);
-
-        let expected1 = Expr::Or(
-            Box::new(Expr::Or(
-                Box::new(Expr::Le(boxed_int_literal!(1), boxed_int_literal!(2))),
-                Box::new(Expr::Gt(boxed_int_literal!(9), boxed_int_literal!(3))),
-            )),
-            Box::new(Expr::Equals(boxed_int_literal!(5), boxed_int_literal!(5))),
-        );
-
-        assert_eq!(r1, Ok((t1, expected1)));
-    }
-
-    #[test]
-    fn test_conjun_expr_parser() {
-        let tokens: Vec<Token> = Scanner::new(&"1 <= 2 && 9 > 3 && 5 == 5").collect();
-        let tokens = Tokens::new(&tokens);
-
-        let r1 = conjun_expr_parser(tokens);
-        let t1 = Tokens::new(&[]);
-
-        let expected1 = Expr::And(
-            Box::new(Expr::And(
-                Box::new(Expr::Le(boxed_int_literal!(1), boxed_int_literal!(2))),
-                Box::new(Expr::Gt(boxed_int_literal!(9), boxed_int_literal!(3))),
-            )),
-            Box::new(Expr::Equals(boxed_int_literal!(5), boxed_int_literal!(5))),
-        );
-
-        assert_eq!(r1, Ok((t1, expected1)));
-    }
-
-    #[test]
-    fn test_compare_expr_parser() {
-        let tokens: Vec<Token> = Scanner::new(&"1 > 2 == 3+1 <= 4").collect();
-        let tokens = Tokens::new(&tokens);
-
-        let r1 = compare_expr_parser(tokens);
-        let t1 = Tokens::new(&[]);
-
-        let expected1 = Expr::Le(
-            Box::new(Expr::Equals(
-                Box::new(Expr::Gt(boxed_int_literal!(1), boxed_int_literal!(2))),
-                Box::new(Expr::Add(boxed_int_literal!(3), boxed_int_literal!(1))),
-            )),
-            boxed_int_literal!(4),
-        );
-
-        assert_eq!(r1, Ok((t1, expected1)));
-    }
-
-    #[test]
-    fn test_concat_expr_parser() {
-        let tokens: Vec<Token> = Scanner::new(&"1:2:3").collect();
-        let tokens = Tokens::new(&tokens);
-
-        let r1 = concat_expr_parser(tokens);
-        let t1 = Tokens::new(&[]);
-        let expected1 = Expr::Cons(
-            boxed_int_literal!(1),
-            Box::new(Expr::Cons(boxed_int_literal!(2), boxed_int_literal!(3))),
-        );
-
-        assert_eq!(r1, Ok((t1, expected1)));
-    }
-
-    #[test]
-    fn test_term_expr_parser() {
-        let tokens: Vec<Token> = Scanner::new(&"24+6/3-8").collect();
-        let tokens = Tokens::new(&tokens);
-
-        let r1 = term_expr_parser(tokens);
-        let t1 = Tokens::new(&[]);
-        let expected1 = Expr::Sub(
-            Box::new(Expr::Add(
-                boxed_int_literal!(24),
-                Box::new(Expr::Div(boxed_int_literal!(6), boxed_int_literal!(3))),
-            )),
-            boxed_int_literal!(8),
-        );
-        assert_eq!(r1, Ok((t1, expected1)));
-    }
-
-    #[test]
-    fn test_factor_expr_parser() {
-        let tokens: Vec<Token> = Scanner::new(&"3*9%2/-26").collect();
-        let tokens = Tokens::new(&tokens);
-
-        let r1 = factor_expr_parser(tokens);
-        let t1 = Tokens::new(&[]);
-        let expected1 = Expr::Div(
-            Box::new(Expr::Mod(
-                Box::new(Expr::Mul(boxed_int_literal!(3), boxed_int_literal!(9))),
-                boxed_int_literal!(2),
-            )),
-            Box::new(Expr::UnaryMinus(boxed_int_literal!(26))),
-        );
-        assert_eq!(r1, Ok((t1, expected1)));
-    }
-
-    #[test]
-    fn test_unary_expr_parser() {
-        let tokens: Vec<Token> = Scanner::new(&"!True").collect();
-        let tokens = Tokens::new(&tokens);
-
-        let r1 = unary_expr_parser(tokens);
-        let t1 = Tokens::new(&[]);
-        let expected1 = Expr::Not(Box::new(Expr::Atom(Atom::BoolLiteral(true))));
-        assert_eq!(r1, Ok((t1, expected1)));
-
-        let tokens: Vec<Token> = Scanner::new(&"-3").collect();
-        let tokens = Tokens::new(&tokens);
-
-        let r2 = unary_expr_parser(tokens);
-        let t2 = Tokens::new(&[]);
-        let expected2 = Expr::UnaryMinus(boxed_int_literal!(3));
-        assert_eq!(r2, Ok((t2, expected2)));
-
-        let tokens: Vec<Token> = Scanner::new(&"---4").collect();
-        let tokens = Tokens::new(&tokens);
-
-        let r2 = unary_expr_parser(tokens);
-        let t2 = Tokens::new(&[]);
-        let expected2 = Expr::UnaryMinus(Box::new(
-            Expr::UnaryMinus(Box::new(
-                Expr::UnaryMinus(boxed_int_literal!(4)),
-            ))
-        ));
-        assert_eq!(r2, Ok((t2, expected2)));
-    }
-
-    #[test]
-    fn test_atom_expr_parser() {
-        let tokens = [
-            Token::new(TokenKind::Bool(true), 0, 0),
-            Token::new(TokenKind::Identifier("x"), 0, 0),
-        ];
-
-        let tokens = Tokens::new(&tokens);
-
-        let r1 = atom_expr_parser(tokens);
-        let t1 = Tokens::new(&tokens[1..]);
-        assert_eq!(r1, Ok((t1, Expr::Atom(Atom::BoolLiteral(true)))));
-
-        let r2 = atom_expr_parser(t1);
-        let t2 = Tokens::new(&tokens[2..]);
-        let var = Variable::new(Id(String::from("x")), Vec::new());
-        assert_eq!(r2, Ok((t2, Expr::Atom(Atom::Variable(var)))));
-    }
-
-    #[test]
-    fn test_literal_parser() {
-        let tokens = [
-            Token::new(TokenKind::Bool(true), 0, 0),
-            Token::new(TokenKind::Char('c'), 1, 0),
-            Token::new(TokenKind::Integer(123), 2, 0),
-        ];
-
-        let tokens = Tokens::new(&tokens);
-
-        let r1 = literal_atom_parser(tokens);
-        let t1 = Tokens::new(&tokens[1..]);
-        assert_eq!(r1, Ok((t1, Atom::BoolLiteral(true))));
-
-        let r2 = literal_atom_parser(t1);
-        let t2 = Tokens::new(&tokens[2..]);
-        assert_eq!(r2, Ok((t2, Atom::CharLiteral('c'))));
-
-        let r3 = literal_atom_parser(t2);
-        let t3 = Tokens::new(&tokens[3..]);
-        assert_eq!(r3, Ok((t3, Atom::IntLiteral(123))));
-    }
-
-    #[test]
-    fn test_func_call_parser() {
-        let tokens: Vec<Token> = Scanner::new(&"my_fun(123, x.hd, False)").collect();
-        let tokens = Tokens::new(&tokens);
-
-        let r1 = fun_call_parser(tokens);
-        let t1 = Tokens::new(&[]);
-
-        let expected1 = Atom::FunCall(FunCall::new(
-            Id(String::from("my_fun")),
-            vec![
-                Expr::Atom(Atom::IntLiteral(123)),
-                Expr::Atom(Atom::Variable(Variable::new(
-                    Id(String::from("x")),
-                    vec![Field::Hd],
-                ))),
-                Expr::Atom(Atom::BoolLiteral(false)),
-            ],
-        ));
-
-        assert_eq!(r1, Ok((t1, expected1)));
-    }
 }
