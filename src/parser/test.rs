@@ -1,7 +1,6 @@
 use super::*;
 use crate::scanner::*;
 
-
 macro_rules! boxed_int_literal (
         ($value:expr) => (
             Box::new(Expr::Atom(Atom::IntLiteral($value)))
