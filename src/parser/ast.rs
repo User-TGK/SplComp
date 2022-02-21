@@ -1,5 +1,5 @@
 #[derive(PartialEq, Debug)]
-pub struct Program(Vec<Decl>);
+pub struct Program(pub Vec<Decl>);
 
 #[derive(PartialEq, Debug)]
 pub enum Decl {
@@ -12,24 +12,24 @@ pub struct Id(pub String);
 
 #[derive(PartialEq, Debug)]
 pub struct VarDecl {
-    var_type: Option<Type>,
-    name: Id,
-    value: Expr,
+    pub var_type: Option<Type>,
+    pub name: Id,
+    pub value: Expr,
 }
 
 #[derive(PartialEq, Debug)]
 pub struct FunDecl {
-    name: Id,
-    params: Vec<Id>,
-    fun_type: Option<FunType>,
-    var_decls: Vec<VarDecl>,
-    statements: Vec<Statement>,
+    pub name: Id,
+    pub params: Vec<Id>,
+    pub fun_type: Option<FunType>,
+    pub var_decls: Vec<VarDecl>,
+    pub statements: Vec<Statement>,
 }
 
 #[derive(PartialEq, Debug)]
 pub struct FunType {
-    param_types: Vec<Type>,
-    return_type: ReturnType,
+    pub param_types: Vec<Type>,
+    pub return_type: ReturnType,
 }
 
 #[derive(PartialEq, Debug)]
@@ -40,16 +40,12 @@ pub enum ReturnType {
 
 #[derive(PartialEq, Debug)]
 pub enum Type {
-    Basic(BasicType),
-    Tuple(Box<Type>, Box<Type>),
-    Array(Box<Type>),
-}
-
-#[derive(PartialEq, Debug)]
-pub enum BasicType {
     Int,
     Bool,
     Char,
+    Tuple(Box<Type>, Box<Type>),
+    Array(Box<Type>),
+    Generic(Id),
 }
 
 #[derive(PartialEq, Debug)]
@@ -58,26 +54,26 @@ pub enum Statement {
     While(While),
     Assign(Assign),
     FunCall(FunCall),
-    Return(Return),
+    Return(Option<Expr>),
 }
 
 #[derive(PartialEq, Debug)]
 pub struct If {
-    cond: Expr,
-    if_true: Vec<Statement>,
-    if_false: Vec<Statement>,
+    pub cond: Expr,
+    pub if_true: Vec<Statement>,
+    pub if_false: Vec<Statement>,
 }
 
 #[derive(PartialEq, Debug)]
 pub struct While {
-    cond: Expr,
-    body: Vec<Statement>,
+    pub cond: Expr,
+    pub body: Vec<Statement>,
 }
 
 #[derive(PartialEq, Debug)]
 pub struct Assign {
-    target: Variable,
-    value: Expr,
+    pub target: Variable,
+    pub value: Expr,
 }
 
 #[derive(PartialEq, Debug)]
@@ -90,11 +86,6 @@ impl FunCall {
     pub fn new(name: Id, args: Vec<Expr>) -> Self {
         Self { name, args }
     }
-}
-
-#[derive(PartialEq, Debug)]
-pub struct Return {
-    value: Option<Expr>,
 }
 
 #[derive(PartialEq, Debug)]

@@ -217,6 +217,16 @@ mod test {
     }
 
     #[test]
+    fn test_double_colon() {
+        single_token_test_helper("::", TokenKind::DoubleColon);
+    }
+
+    #[test]
+    fn test_right_arrow() {
+        single_token_test_helper("->", TokenKind::RightArrow);
+    }
+
+    #[test]
     fn test_plus() {
         single_token_test_helper("+", TokenKind::Plus);
     }
@@ -368,6 +378,11 @@ mod test {
     #[test]
     fn test_char_type() {
         single_token_test_helper("Char", TokenKind::CharType);
+    }
+
+    #[test]
+    fn test_void_type() {
+        single_token_test_helper("Void", TokenKind::VoidType);
     }
 
     #[test]
