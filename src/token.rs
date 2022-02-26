@@ -368,7 +368,8 @@ impl<'a> TokenKind<'a> {
             Self::Assignment => Some(r"="),
             Self::Integer(_) => Some(r"([0-9])+"),
             Self::Bool(_) => Some(r"True|False"),
-            Self::Char(_) => Some(r"'[0-9a-zA-Z.\[\]]'"),
+            // Either an escaped ' or \, or any character than ' or \
+            Self::Char(_) => Some(r"('\\['\\]')|('[^'\\]')"),
             Self::Identifier(_) => Some(r"[[:alpha:]](_|[[:alnum:]])*"),
             Self::Var => Some(r"var\b"),
             Self::If => Some(r"if\b"),

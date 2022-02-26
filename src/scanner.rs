@@ -149,9 +149,15 @@ impl<'a> Iterator for Scanner<'a> {
                     } else if token.kind == TokenKind::Bool(bool::default()) {
                         token.kind = TokenKind::Bool(m.as_str() == "True");
                     } else if token.kind == TokenKind::Char(char::default()) {
-                        // TODO: deal with ASCII if required..?
-                        token.kind = TokenKind::Char(m.as_str().as_bytes()[1] as char);
-                    } else if token.kind == TokenKind::Identifier(&"") {
+                        let m = m.as_str();
+                        let c = match m {
+                            "'\\''" => '\'',
+                            "'\\\\'" => '\\',
+                            _ => m.chars().skip(1).next().unwrap(),
+                        };
+
+                        token.kind = TokenKind::Char(c);
+                    } else if token.kind == TokenKind::Identifier("") {
                         token.kind = TokenKind::Identifier(m.as_str());
                     }
 
@@ -323,6 +329,11 @@ mod test {
     #[test]
     fn test_char() {
         single_token_test_helper("'c'", TokenKind::Char('c'));
+
+        single_token_test_helper("'+'", TokenKind::Char('+'));
+
+        single_token_test_helper("'\\''", TokenKind::Char('\''));
+        single_token_test_helper("'\\\\'", TokenKind::Char('\\'));
     }
 
     #[test]
