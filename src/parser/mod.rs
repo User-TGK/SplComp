@@ -294,68 +294,55 @@ fn expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
 }
 
 fn disjun_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
-    let (tail, (start, conjunctions)) = tuple((
-        conjun_expr_parser,
-        many0(tuple((or_parser, conjun_expr_parser))),
-    ))(tokens)?;
+    let (rest, start) = conjun_expr_parser(tokens)?;
 
-    Ok((
-        tail,
-        conjunctions
-            .into_iter()
-            .fold(start, |expression, (_, conjun)| {
-                Expr::Or(Box::new(expression), Box::new(conjun))
-            }),
-    ))
+    fold_many0(
+        preceded(or_parser, conjun_expr_parser),
+        move || start.clone(),
+        |acc, rhs| Expr::Or(Box::new(acc), Box::new(rhs)),
+    )(rest)
 }
 
 fn conjun_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
-    let (tail, (start, conjunctions)) = tuple((
-        compare_expr_parser,
-        many0(tuple((and_parser, compare_expr_parser))),
-    ))(tokens)?;
+    let (rest, start) = compare_expr_parser(tokens)?;
 
-    Ok((
-        tail,
-        conjunctions
-            .into_iter()
-            .fold(start, |expression, (_, conjun)| {
-                Expr::And(Box::new(expression), Box::new(conjun))
-            }),
-    ))
+    fold_many0(
+        preceded(and_parser, compare_expr_parser),
+        move || start.clone(),
+        |acc, rhs| Expr::And(Box::new(acc), Box::new(rhs)),
+    )(rest)
 }
 
 fn compare_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
-    let (tail, mat) = concat_expr_parser(tokens)?;
-    let (tail2, ops) = many0(tuple((
-        alt((
-            equals_parser,
-            not_equals_parser,
-            lt_parser,
-            le_parser,
-            gt_parser,
-            ge_parser,
-        )),
-        concat_expr_parser,
-    )))(tail)?;
+    let (rest, start) = concat_expr_parser(tokens)?;
 
-    let mut term_expr = mat;
-
-    for (op, right) in ops {
-        let left = Box::new(term_expr);
-        let right = Box::new(right);
-        term_expr = match op[0].kind {
-            TokenKind::Equals => Expr::Equals(left, right),
-            TokenKind::NotEquals => Expr::NotEquals(left, right),
-            TokenKind::Lt => Expr::Lt(left, right),
-            TokenKind::Le => Expr::Le(left, right),
-            TokenKind::Gt => Expr::Gt(left, right),
-            TokenKind::Ge => Expr::Ge(left, right),
-            _ => unreachable!(),
-        };
-    }
-
-    Ok((tail2, term_expr))
+    fold_many0(
+        pair(
+            alt((
+                equals_parser,
+                not_equals_parser,
+                lt_parser,
+                le_parser,
+                gt_parser,
+                ge_parser,
+            )),
+            concat_expr_parser,
+        ),
+        move || start.clone(),
+        |acc, (op, rhs)| {
+            let acc = Box::new(acc);
+            let rhs = Box::new(rhs);
+            match op[0].kind {
+                TokenKind::Equals => Expr::Equals(acc, rhs),
+                TokenKind::NotEquals => Expr::NotEquals(acc, rhs),
+                TokenKind::Lt => Expr::Lt(acc, rhs),
+                TokenKind::Le => Expr::Le(acc, rhs),
+                TokenKind::Gt => Expr::Gt(acc, rhs),
+                TokenKind::Ge => Expr::Ge(acc, rhs),
+                _ => unreachable!(),
+            }
+        }
+    )(rest)
 }
 
 fn concat_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
@@ -373,48 +360,46 @@ fn concat_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
 }
 
 fn term_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
-    let (tail, mat) = factor_expr_parser(tokens)?;
-    let (tail2, ops) = many0(tuple((
-        alt((plus_parser, minus_parser)),
-        factor_expr_parser,
-    )))(tail)?;
+    let (rest, start) = factor_expr_parser(tokens)?;
 
-    let mut term_expr = mat;
-
-    for (op, right) in ops {
-        let left = Box::new(term_expr);
-        let right = Box::new(right);
-        term_expr = match op[0].kind {
-            TokenKind::Plus => Expr::Add(left, right),
-            TokenKind::Minus => Expr::Sub(left, right),
-            _ => unreachable!(),
-        };
-    }
-
-    Ok((tail2, term_expr))
+    fold_many0(
+        pair(
+            alt((plus_parser, minus_parser)),
+            factor_expr_parser,
+        ),
+        move || start.clone(),
+        |acc, (op, rhs)| {
+            let acc = Box::new(acc);
+            let rhs = Box::new(rhs);
+            match op[0].kind {
+                TokenKind::Plus => Expr::Add(acc, rhs),
+                TokenKind::Minus => Expr::Sub(acc, rhs),
+                _ => unreachable!(),
+            }
+        }
+    )(rest)
 }
 
 fn factor_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
-    let (tail, mat) = unary_expr_parser(tokens)?;
-    let (tail2, ops) = many0(tuple((
-        alt((times_parser, divide_parser, modulo_parser)),
-        unary_expr_parser,
-    )))(tail)?;
+    let (rest, start) = unary_expr_parser(tokens)?;
 
-    let mut factor_expr = mat;
-
-    for (op, right) in ops {
-        let left = Box::new(factor_expr);
-        let right = Box::new(right);
-        factor_expr = match op[0].kind {
-            TokenKind::Times => Expr::Mul(left, right),
-            TokenKind::Divide => Expr::Div(left, right),
-            TokenKind::Modulo => Expr::Mod(left, right),
-            _ => unreachable!(),
-        };
-    }
-
-    Ok((tail2, factor_expr))
+    fold_many0(
+        pair(
+            alt((times_parser, divide_parser, modulo_parser)),
+            unary_expr_parser,
+        ),
+        move || start.clone(),
+        |acc, (op, rhs)| {
+            let acc = Box::new(acc);
+            let rhs = Box::new(rhs);
+            match op[0].kind {
+                TokenKind::Times => Expr::Mul(acc, rhs),
+                TokenKind::Divide => Expr::Div(acc, rhs),
+                TokenKind::Modulo => Expr::Mod(acc, rhs),
+                _ => unreachable!(),
+            }
+        }
+    )(rest)
 }
 
 fn unary_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
