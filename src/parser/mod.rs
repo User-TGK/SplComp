@@ -425,22 +425,17 @@ fn unary_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
 
 fn atom_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     alt((
-        map(
-            alt((
-                // FunCall
-                map(fun_call_parser, Atom::FunCall),
-                // id [Field]
-                variable_atom_parser,
-                // int | char | 'True' | 'False'
-                literal_atom_parser,
-                // '[]'
-                map(empty_list_parser, |_| Atom::EmptyList),
-                // '(' Exp ',' Exp ')'
-                tuple_atom_parser,
-            )),
-            |a| Expr::Atom(a),
-        ),
-        // '(' expr ')'
+        // FunCall
+        map(fun_call_parser, |f| Expr::Atom(Atom::FunCall(f))),
+        // id [Field]
+        map(variable_atom_parser, Expr::Atom),
+        // int | char | 'True' | 'False'
+        map(literal_atom_parser, Expr::Atom),
+        // '[]'
+        map(empty_list_parser, |_| Expr::Atom(Atom::EmptyList)),
+        // '(' Expr ',' Expr ')'
+        map(tuple_atom_parser, Expr::Atom),
+        // '(' Expr ')'
         delimited(opening_paren_parser, expr_parser, closing_paren_parser),
     ))(tokens)
 }
