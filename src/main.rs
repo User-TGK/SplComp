@@ -1,8 +1,12 @@
+use group3::parser::pp::PrettyPrintable;
+use group3::parser::*;
+use group3::scanner::Scanner;
+use group3::token::{Token, Tokens};
+
+use pretty_trait::to_string;
+
 use std::error::Error;
 use std::{env, fs};
-
-use group3::scanner::Scanner;
-use group3::token::Token;
 
 pub fn main() -> Result<(), Box<dyn Error>> {
     let mut args = env::args();
@@ -15,7 +19,21 @@ pub fn main() -> Result<(), Box<dyn Error>> {
     let scanner = Scanner::new(&input);
     let tokens: Vec<Token> = scanner.collect();
 
-    println!("{:#?}", tokens);
+    let tokens = Tokens::new(&tokens);
+
+    if let Ok((t, ast)) = program_parser(tokens) {
+        if t.is_empty() {
+            let max_line = Some(40);
+            let tab_size = 4;
+
+            println!("// Successfully parsed input file.");
+            println!("{}", to_string(&ast.to_pretty(), max_line, tab_size));
+        } else {
+            println!("Parser did not complete, remaining tokens: {:?}", t);
+        }
+    } else {
+        println!("Parser error");
+    }
 
     Ok(())
 }

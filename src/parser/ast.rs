@@ -80,8 +80,8 @@ pub struct Assign {
 
 #[derive(PartialEq, Debug)]
 pub struct FunCall {
-    name: Id,
-    args: Vec<Expr>,
+    pub(crate) name: Id,
+    pub(crate) args: Vec<Expr>,
 }
 
 impl FunCall {
@@ -124,8 +124,8 @@ pub enum Atom {
 
 #[derive(PartialEq, Debug)]
 pub struct Variable {
-    name: Id,
-    fields: Vec<Field>,
+    pub(crate) name: Id,
+    pub(crate) fields: Vec<Field>,
 }
 
 impl Variable {
