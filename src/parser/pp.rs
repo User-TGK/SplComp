@@ -165,6 +165,7 @@ impl PrettyPrintable for Statement {
         match self {
             Statement::If(i) => i.to_pretty(),
             Statement::While(w) => w.to_pretty(),
+            Statement::VarDecl(v) => v.to_pretty(),
             Statement::Assign(a) => a.to_pretty(),
             Statement::FunCall(f) => Box::new(f.to_pretty().join(";")),
             Statement::Return(e) => match e {

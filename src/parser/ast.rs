@@ -54,6 +54,7 @@ pub enum Type {
 pub enum Statement {
     If(If),
     While(While),
+    VarDecl(VarDecl),
     Assign(Assign),
     FunCall(FunCall),
     Return(Option<Expr>),
