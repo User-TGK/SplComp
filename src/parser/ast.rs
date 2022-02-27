@@ -78,7 +78,7 @@ pub struct Assign {
     pub value: Expr,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct FunCall {
     pub(crate) name: Id,
     pub(crate) args: Vec<Expr>,
@@ -90,7 +90,7 @@ impl FunCall {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Expr {
     Or(Box<Expr>, Box<Expr>),
     And(Box<Expr>, Box<Expr>),
@@ -111,7 +111,7 @@ pub enum Expr {
     Atom(Atom),
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Atom {
     IntLiteral(BigUint),
     BoolLiteral(bool),
@@ -122,7 +122,7 @@ pub enum Atom {
     Tuple(Box<Expr>, Box<Expr>),
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Variable {
     pub(crate) name: Id,
     pub(crate) fields: Vec<Field>,
@@ -134,7 +134,7 @@ impl Variable {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Field {
     Hd,
     Tl,
