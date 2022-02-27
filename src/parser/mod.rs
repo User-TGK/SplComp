@@ -499,7 +499,7 @@ fn literal_atom_parser(tokens: Tokens) -> IResult<Tokens, Atom> {
     match mat[0].kind {
         TokenKind::Bool(b) => Ok((tail, Atom::BoolLiteral(b))),
         TokenKind::Char(c) => Ok((tail, Atom::CharLiteral(c))),
-        TokenKind::Integer(i) => Ok((tail, Atom::IntLiteral(i))),
+        TokenKind::Integer(ref i) => Ok((tail, Atom::IntLiteral(i.clone()))),
         _ => Err(Err::Error(Error::new(tokens, ErrorKind::Tag))),
     }
 }

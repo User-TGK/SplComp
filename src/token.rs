@@ -2,6 +2,8 @@ use crate::error::ErrorKind;
 
 use nom::{InputIter, InputLength, InputTake, Needed, Slice};
 
+use num_bigint::BigUint;
+
 use std::iter::Enumerate;
 use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
 
@@ -129,7 +131,7 @@ impl<'a> Token<'a> {
             TokenKind::DoubleColon,
             TokenKind::RightArrow,
             TokenKind::Plus,
-            TokenKind::Integer(i64::default()),
+            TokenKind::Integer(BigUint::default()),
             TokenKind::Minus,
             TokenKind::Divide,
             TokenKind::Times,
@@ -219,7 +221,7 @@ pub enum TokenKind<'a> {
 
     // Literals
     /// Integer literals
-    Integer(i64),
+    Integer(BigUint),
     /// Boolean literals, "True" or "False"
     Bool(bool),
     /// Character literals like "'a'"

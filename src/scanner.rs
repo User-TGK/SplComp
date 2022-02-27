@@ -1,6 +1,8 @@
 use crate::error::ErrorKind;
 use crate::token::{Token, TokenKind};
 
+use num_bigint::BigUint;
+
 use regex::Regex;
 
 pub struct Scanner<'a> {
@@ -144,7 +146,7 @@ impl<'a> Iterator for Scanner<'a> {
 
                     let mut token = Token::new(token_kind, self.line, self.column);
 
-                    if token.kind == TokenKind::Integer(i64::default()) {
+                    if token.kind == TokenKind::Integer(BigUint::default()) {
                         token.kind = TokenKind::Integer(m.as_str().parse().unwrap());
                     } else if token.kind == TokenKind::Bool(bool::default()) {
                         token.kind = TokenKind::Bool(m.as_str() == "True");
@@ -313,7 +315,12 @@ mod test {
 
     #[test]
     fn test_positive_integer() {
-        single_token_test_helper("562", TokenKind::Integer(562));
+        single_token_test_helper("562", TokenKind::Integer(562u32.into()));
+
+        single_token_test_helper(
+            "123456789123456789123456789123456789",
+            TokenKind::Integer("123456789123456789123456789123456789".parse().unwrap())
+        );
     }
 
     #[test]
@@ -461,17 +468,17 @@ mod test {
 
         assert_eq!(
             scanner.next(),
-            Some(Token::new(TokenKind::Integer(1), 0, 0))
+            Some(Token::new(TokenKind::Integer(1u32.into()), 0, 0))
         );
         assert_eq!(scanner.next(), Some(Token::new(TokenKind::Minus, 0, 1)));
         assert_eq!(
             scanner.next(),
-            Some(Token::new(TokenKind::Integer(2), 0, 2))
+            Some(Token::new(TokenKind::Integer(2u32.into()), 0, 2))
         );
         assert_eq!(scanner.next(), Some(Token::new(TokenKind::Minus, 0, 3)));
         assert_eq!(
             scanner.next(),
-            Some(Token::new(TokenKind::Integer(3), 0, 4))
+            Some(Token::new(TokenKind::Integer(3u32.into()), 0, 4))
         );
         assert_eq!(scanner.next(), Some(Token::new(TokenKind::Semicolon, 0, 5)));
     }
@@ -495,7 +502,7 @@ mod test {
         assert_eq!(scanner.next(), Some(Token::new(TokenKind::Lt, 1, 40)));
         assert_eq!(
             scanner.next(),
-            Some(Token::new(TokenKind::Integer(12), 1, 42))
+            Some(Token::new(TokenKind::Integer(12u32.into()), 1, 42))
         );
         assert_eq!(
             scanner.next(),
