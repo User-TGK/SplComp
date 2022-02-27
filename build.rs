@@ -33,9 +33,7 @@ fn main() {
 
     let ignored = [
         "x.spl",
-        "many_parenthesis.spl",
         "unbalanced_parenthesis2.spl",
-        "more_parenthesis.spl",
         "unbalanced_parenthesis.spl",
     ];
 

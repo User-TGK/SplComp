@@ -341,32 +341,35 @@ fn compare_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
                 TokenKind::Ge => Expr::Ge(acc, rhs),
                 _ => unreachable!(),
             }
-        }
+        },
     )(rest)
 }
 
 fn concat_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
-    let (tail, (ops, mut expr)) = tuple((
-        many0(tuple((term_expr_parser, cons_parser))),
-        term_expr_parser,
-    ))(tokens)?;
+    let (rest, last) = term_expr_parser(tokens)?;
+    let (tail, pairs) = many0(tuple((cons_parser, term_expr_parser)))(rest)?;
 
-    // Right associativity.
-    for (left, _op) in ops.into_iter().rev() {
-        expr = Expr::Cons(Box::new(left), Box::new(expr));
+    if pairs.is_empty() {
+        Ok((rest, last))
+    } else {
+        // Right associativity.
+        let mut expr = pairs.last().unwrap().1.clone();
+
+        for (_, e) in pairs.into_iter().rev().skip(1) {
+            expr = Expr::Cons(Box::new(e), Box::new(expr));
+        }
+
+        expr = Expr::Cons(Box::new(last), Box::new(expr));
+
+        Ok((tail, expr))
     }
-
-    Ok((tail, expr))
 }
 
 fn term_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     let (rest, start) = factor_expr_parser(tokens)?;
 
     fold_many0(
-        pair(
-            alt((plus_parser, minus_parser)),
-            factor_expr_parser,
-        ),
+        pair(alt((plus_parser, minus_parser)), factor_expr_parser),
         move || start.clone(),
         |acc, (op, rhs)| {
             let acc = Box::new(acc);
@@ -376,7 +379,7 @@ fn term_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
                 TokenKind::Minus => Expr::Sub(acc, rhs),
                 _ => unreachable!(),
             }
-        }
+        },
     )(rest)
 }
 
@@ -398,7 +401,7 @@ fn factor_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
                 TokenKind::Modulo => Expr::Mod(acc, rhs),
                 _ => unreachable!(),
             }
-        }
+        },
     )(rest)
 }
 
