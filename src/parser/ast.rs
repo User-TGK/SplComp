@@ -1,3 +1,5 @@
+use num_bigint::BigUint;
+
 #[derive(PartialEq, Debug)]
 pub struct Program(pub Vec<Decl>);
 
@@ -111,7 +113,7 @@ pub enum Expr {
 
 #[derive(PartialEq, Debug)]
 pub enum Atom {
-    IntLiteral(i64),
+    IntLiteral(BigUint),
     BoolLiteral(bool),
     CharLiteral(char),
     FunCall(FunCall),

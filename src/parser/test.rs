@@ -3,7 +3,7 @@ use crate::scanner::*;
 
 macro_rules! boxed_int_literal (
         ($value:expr) => (
-            Box::new(Expr::Atom(Atom::IntLiteral($value)))
+            Box::new(Expr::Atom(Atom::IntLiteral(u32::into($value))))
         )
     );
 
@@ -183,7 +183,7 @@ fn test_program_parser() {
             Decl::VarDecl(VarDecl {
                 var_type: None,
                 name: Id("myVar".to_string()),
-                value: Expr::Atom(Atom::IntLiteral(123))
+                value: Expr::Atom(Atom::IntLiteral(123u32.into()))
             }),
             Decl::FunDecl(FunDecl {
                 name: Id("myFun".to_string()),
@@ -233,7 +233,7 @@ fn test_var_decl_parser() {
         VarDecl {
             var_type: Some(Type::Int),
             name: Id("y".to_string()),
-            value: Expr::Atom(Atom::IntLiteral(42)),
+            value: Expr::Atom(Atom::IntLiteral(42u32.into())),
         }
     );
 }
@@ -369,7 +369,7 @@ fn test_assign_statement_parser() {
         statement,
         Statement::Assign(Assign {
             target: Variable::new(Id("myVar".to_string()), Vec::new()),
-            value: Expr::Atom(Atom::IntLiteral(123)),
+            value: Expr::Atom(Atom::IntLiteral(123u32.into())),
         })
     );
 
@@ -446,7 +446,7 @@ fn test_fun_call_statement_parser() {
         Statement::FunCall(FunCall::new(
             Id("functionCall".to_string()),
             vec![
-                Expr::Atom(Atom::IntLiteral(123)),
+                Expr::Atom(Atom::IntLiteral(123u32.into())),
                 Expr::Atom(Atom::BoolLiteral(false)),
             ]
         ))
@@ -475,7 +475,7 @@ fn test_return_statement_parser() {
     assert!(rest.is_empty());
     assert_eq!(
         statement,
-        Statement::Return(Some(Expr::Atom(Atom::IntLiteral(54321))))
+        Statement::Return(Some(Expr::Atom(Atom::IntLiteral(54321u32.into()))))
     );
 }
 
@@ -653,7 +653,7 @@ fn test_fun_decl_parser() {
             var_decls: vec![VarDecl {
                 var_type: Some(Type::Int),
                 name: Id("someVar".to_string()),
-                value: Expr::Atom(Atom::IntLiteral(0)),
+                value: Expr::Atom(Atom::IntLiteral(0u32.into())),
             },],
             statements: vec![Statement::Return(None)],
         }
@@ -760,7 +760,7 @@ fn test_fun_call_parser() {
     let expected1 = FunCall::new(
         Id(String::from("my_fun")),
         vec![
-            Expr::Atom(Atom::IntLiteral(123)),
+            Expr::Atom(Atom::IntLiteral(123u32.into())),
             Expr::Atom(Atom::Variable(Variable::new(
                 Id(String::from("x")),
                 vec![Field::Hd],
@@ -777,7 +777,7 @@ fn test_literal_parser() {
     let tokens = [
         Token::new(TokenKind::Bool(true), 0, 0),
         Token::new(TokenKind::Char('c'), 1, 0),
-        Token::new(TokenKind::Integer(123), 2, 0),
+        Token::new(TokenKind::Integer(123u32.into()), 2, 0),
     ];
 
     let tokens = Tokens::new(&tokens);
@@ -792,5 +792,5 @@ fn test_literal_parser() {
 
     let r3 = literal_atom_parser(t2);
     let t3 = Tokens::new(&tokens[3..]);
-    assert_eq!(r3, Ok((t3, Atom::IntLiteral(123))));
+    assert_eq!(r3, Ok((t3, Atom::IntLiteral(123u32.into()))));
 }
