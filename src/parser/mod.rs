@@ -480,12 +480,15 @@ fn field_parser(tokens: Tokens) -> IResult<Tokens, Vec<Field>> {
 fn literal_atom_parser(tokens: Tokens) -> IResult<Tokens, Atom> {
     let (tail, mat) = take(1usize)(tokens)?;
 
-    match mat[0].kind {
-        TokenKind::Bool(b) => Ok((tail, Atom::BoolLiteral(b))),
-        TokenKind::Char(c) => Ok((tail, Atom::CharLiteral(c))),
-        TokenKind::Integer(ref i) => Ok((tail, Atom::IntLiteral(i.clone()))),
-        _ => Err(Err::Error(Error::new(tokens, ErrorKind::Tag))),
-    }
+    let atom = match mat[0].kind {
+        TokenKind::Bool(b) => Atom::BoolLiteral(b),
+        TokenKind::Char(c) => Atom::CharLiteral(c),
+        TokenKind::Integer(ref i) => Atom::IntLiteral(i.clone()),
+        TokenKind::String(ref string) => Atom::StringLiteral(string.clone()),
+        _ => return Err(Err::Error(Error::new(tokens, ErrorKind::Tag))),
+    };
+
+    Ok((tail, atom))
 }
 
 fn fun_call_parser(tokens: Tokens) -> IResult<Tokens, FunCall> {

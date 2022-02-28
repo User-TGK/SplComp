@@ -116,6 +116,7 @@ pub enum Atom {
     IntLiteral(BigUint),
     BoolLiteral(bool),
     CharLiteral(char),
+    StringLiteral(String),
     FunCall(FunCall),
     Variable(Variable),
     EmptyList,
