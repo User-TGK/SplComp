@@ -24,7 +24,6 @@ pub struct FunDecl {
     pub name: Id,
     pub params: Vec<Id>,
     pub fun_type: Option<FunType>,
-    pub var_decls: Vec<VarDecl>,
     pub statements: Vec<Statement>,
 }
 

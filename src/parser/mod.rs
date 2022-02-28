@@ -188,15 +188,14 @@ fn fun_decl_parser(tokens: Tokens) -> IResult<Tokens, FunDecl> {
             fun_decl_type_parser,
             delimited(
                 opening_brace_parser,
-                pair(many0(var_decl_parser), many1(statement_parser)),
+                many1(statement_parser),
                 closing_brace_parser,
             ),
         )),
-        |(name, params, fun_type, (var_decls, statements))| FunDecl {
+        |(name, params, fun_type, statements)| FunDecl {
             name,
             params,
             fun_type,
-            var_decls,
             statements,
         },
     )(tokens)
