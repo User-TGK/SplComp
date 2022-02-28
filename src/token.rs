@@ -152,6 +152,7 @@ impl<'a> Token<'a> {
             TokenKind::Assignment,
             TokenKind::Bool(bool::default()),
             TokenKind::Char(char::default()),
+            TokenKind::String(String::new()),
             TokenKind::Var,
             TokenKind::If,
             TokenKind::Else,
@@ -226,6 +227,8 @@ pub enum TokenKind<'a> {
     Bool(bool),
     /// Character literals like "'a'"
     Char(char),
+    /// String literals like <"Hello world">, <"Hello \" world"> or <"Hello \\ world">
+    String(String),
     /// Identifiers like "var_name" or "funcName123"
     Identifier(&'a str),
 
@@ -317,6 +320,7 @@ impl<'a> TokenKind<'a> {
             Self::Integer(_) => "In",
             Self::Bool(_) => "Bo",
             Self::Char(_) => "Ch",
+            Self::String(_) => "St",
             Self::Identifier(_) => "Id",
             Self::Var => "Va",
             Self::If => "If",
@@ -370,8 +374,10 @@ impl<'a> TokenKind<'a> {
             Self::Assignment => Some(r"="),
             Self::Integer(_) => Some(r"([0-9])+"),
             Self::Bool(_) => Some(r"True|False"),
-            // Either an escaped ' or \, or any character than ' or \
-            Self::Char(_) => Some(r"('\\['\\]')|('[^'\\]')"),
+            // Either an escape sequence, or any character other than ', \
+            Self::Char(_) => Some(r"'((\\.)|([^'\\]))'"),
+            // Either an escape sequence, or any character other than ", \
+            Self::String(_) => Some(r#""((\\.)|([^"\\]))*""#),
             Self::Identifier(_) => Some(r"[[:alpha:]](_|[[:alnum:]])*"),
             Self::Var => Some(r"var\b"),
             Self::If => Some(r"if\b"),

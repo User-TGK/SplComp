@@ -807,6 +807,12 @@ fn test_literal_parser() {
         Token::new(TokenKind::Bool(true), 0, 0),
         Token::new(TokenKind::Char('c'), 1, 0),
         Token::new(TokenKind::Integer(123u32.into()), 2, 0),
+        Token::new(
+            // No escape sequences, those are handled in the scanner already
+            TokenKind::String(r#"Hello " world with \ problematic characters"#.to_string()),
+            3,
+            0,
+        ),
     ];
 
     let tokens = Tokens::new(&tokens);
@@ -822,4 +828,14 @@ fn test_literal_parser() {
     let r3 = literal_atom_parser(t2);
     let t3 = Tokens::new(&tokens[3..]);
     assert_eq!(r3, Ok((t3, Atom::IntLiteral(123u32.into()))));
+
+    let r4 = literal_atom_parser(t3);
+    let t4 = Tokens::new(&tokens[4..]);
+    assert_eq!(
+        r4,
+        Ok((
+            t4,
+            Atom::StringLiteral(r#"Hello " world with \ problematic characters"#.to_string())
+        ))
+    );
 }

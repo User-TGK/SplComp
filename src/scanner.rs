@@ -1,8 +1,6 @@
 use crate::error::ErrorKind;
 use crate::token::{Token, TokenKind};
 
-use num_bigint::BigUint;
-
 use regex::Regex;
 
 pub struct Scanner<'a> {
@@ -146,21 +144,49 @@ impl<'a> Iterator for Scanner<'a> {
 
                     let mut token = Token::new(token_kind, self.line, self.column);
 
-                    if token.kind == TokenKind::Integer(BigUint::default()) {
-                        token.kind = TokenKind::Integer(m.as_str().parse().unwrap());
-                    } else if token.kind == TokenKind::Bool(bool::default()) {
-                        token.kind = TokenKind::Bool(m.as_str() == "True");
-                    } else if token.kind == TokenKind::Char(char::default()) {
-                        let m = m.as_str();
-                        let c = match m {
-                            "'\\''" => '\'',
-                            "'\\\\'" => '\\',
-                            _ => m.chars().skip(1).next().unwrap(),
-                        };
+                    match token.kind {
+                        TokenKind::Integer(_) => {
+                            token.kind = TokenKind::Integer(m.as_str().parse().unwrap())
+                        }
+                        TokenKind::Bool(_) => token.kind = TokenKind::Bool(m.as_str() == "True"),
+                        TokenKind::Char(_) => {
+                            let matched = m.as_str();
+                            let chars = &matched[1..matched.len()-1];
+                            let c = match chars {
+                                "\\'" => '\'',
+                                "\\\\" => '\\',
+                                "\\n" => '\n',
+                                "\\r" => '\r',
+                                "\\t" => '\t',
+                                _ if chars.starts_with('\\') => {
+                                    let e = Some(self.error_token(ErrorKind::IllegalEscape(chars.to_string())));
 
-                        token.kind = TokenKind::Char(c);
-                    } else if token.kind == TokenKind::Identifier("") {
-                        token.kind = TokenKind::Identifier(m.as_str());
+                                    self.update_line_column_for_new_index(m.end());
+
+                                    self.text = &self.text[m.end()..];
+
+                                    return e;
+                                }
+                                _ => chars.chars().next().unwrap(),
+                            };
+
+                            token.kind = TokenKind::Char(c);
+                        }
+                        TokenKind::String(_) => {
+                            let matched = m.as_str();
+                            let string = matched[1..matched.len() - 1]
+                                .replace(r#"\""#, r#"""#)
+                                .replace(r"\\", r"\")
+                                .replace(r"\n", "\n")
+                                .replace(r"\r", "\r")
+                                .replace(r"\t", "\t");
+
+                            // TODO: handle illegal escapes
+
+                            token.kind = TokenKind::String(string);
+                        }
+                        TokenKind::Identifier(_) => token.kind = TokenKind::Identifier(m.as_str()),
+                        _ => {}
                     }
 
                     self.update_line_column_for_new_index(m.end());
@@ -171,8 +197,6 @@ impl<'a> Iterator for Scanner<'a> {
                 }
             }
         }
-
-        // TODO: tokenize non-whitespace/comments
 
         None
     }
@@ -319,7 +343,7 @@ mod test {
 
         single_token_test_helper(
             "123456789123456789123456789123456789",
-            TokenKind::Integer("123456789123456789123456789123456789".parse().unwrap())
+            TokenKind::Integer("123456789123456789123456789123456789".parse().unwrap()),
         );
     }
 
@@ -341,6 +365,36 @@ mod test {
 
         single_token_test_helper("'\\''", TokenKind::Char('\''));
         single_token_test_helper("'\\\\'", TokenKind::Char('\\'));
+        single_token_test_helper("'\\n'", TokenKind::Char('\n'));
+        single_token_test_helper("'\\r'", TokenKind::Char('\r'));
+        single_token_test_helper("'\\t'", TokenKind::Char('\t'));
+        single_token_test_helper("'\\x'", TokenKind::Error(ErrorKind::IllegalEscape("\\x".to_string())));
+    }
+
+    #[test]
+    fn test_string() {
+        single_token_test_helper(
+            r#""Hello world""#,
+            TokenKind::String("Hello world".to_string()),
+        );
+
+        single_token_test_helper(
+            r#""\"""#,
+            TokenKind::String(r#"""#.to_string()),
+        );
+
+        single_token_test_helper(
+            r#""\\""#,
+            TokenKind::String(r#"\"#.to_string()),
+        );
+
+        single_token_test_helper(r#""\n""#, TokenKind::String("\n".to_string()));
+
+        single_token_test_helper(r#""\r""#, TokenKind::String("\r".to_string()));
+
+        single_token_test_helper(r#""\t""#, TokenKind::String("\t".to_string()));
+
+        // TODO: illegal escapes
     }
 
     #[test]

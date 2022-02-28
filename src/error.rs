@@ -3,6 +3,7 @@ pub enum ErrorKind {
     // Lexer errors
     IllegalToken(String),
     UnclosedMultiLineComment,
+    IllegalEscape(String),
 
     Unknown,
 }

@@ -266,6 +266,10 @@ impl PrettyPrintable for Atom {
                 false => String::from("False"),
             }),
             Atom::CharLiteral(c) => Box::new(format!("'{}'", c.to_string())),
+            Atom::StringLiteral(string) => {
+                let escaped = string.replace("\\", "\\\\").replace("\"", "\\\"");
+                Box::new(format!("\"{}\"", escaped))
+            }
             Atom::FunCall(f) => f.to_pretty(),
             Atom::Variable(v) => v.to_pretty(),
             Atom::EmptyList => Box::new(String::from("[]")),
