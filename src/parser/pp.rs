@@ -79,8 +79,7 @@ impl PrettyPrintable for VarDecl {
                 .join(self.name.to_pretty())
                 .join(" = ")
                 .join(self.value.to_pretty())
-                .join(";")
-                .join(Sep(1)),
+                .join(";"),
         )
     }
 }
@@ -103,14 +102,10 @@ impl PrettyPrintable for FunDecl {
                     .join(self.fun_type.to_pretty())
                     .join(Sep(1))
                     .join("{")
-                    .join(block(
-                        delimited(&"", self.var_decls.iter().map(VarDecl::to_pretty)).join(
-                            delimited(
-                                &"".join(Sep(1)),
-                                self.statements.iter().map(Statement::to_pretty),
-                            ),
-                        ),
-                    ))
+                    .join(block(delimited(
+                        &"".join(Sep(1)),
+                        self.statements.iter().map(Statement::to_pretty),
+                    )))
                     .join("}"),
             ),
         )
@@ -165,6 +160,7 @@ impl PrettyPrintable for Statement {
         match self {
             Statement::If(i) => i.to_pretty(),
             Statement::While(w) => w.to_pretty(),
+            Statement::VarDecl(v) => v.to_pretty(),
             Statement::Assign(a) => a.to_pretty(),
             Statement::FunCall(f) => Box::new(f.to_pretty().join(";")),
             Statement::Return(e) => match e {
