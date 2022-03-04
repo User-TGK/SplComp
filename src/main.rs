@@ -21,18 +21,22 @@ pub fn main() -> Result<(), Box<dyn Error>> {
 
     let tokens = Tokens::new(&tokens);
 
-    if let Ok((t, ast)) = program_parser(tokens) {
-        if t.is_empty() {
-            let max_line = Some(40);
-            let tab_size = 4;
+    match program_parser(tokens) {
+        Ok((t, ast)) => {
+            if t.is_empty() {
+                let max_line = Some(40);
+                let tab_size = 4;
 
-            println!("// Successfully parsed input file.");
-            println!("{}", to_string(&ast.to_pretty(), max_line, tab_size));
-        } else {
-            println!("Parser did not complete, remaining tokens: {:?}", t);
+                println!("// Successfully parsed input file.");
+                println!("{}", to_string(&ast.to_pretty(), max_line, tab_size));
+            } else {
+                println!("Parser did not complete, remaining tokens: {:?}", t);
+            }
         }
-    } else {
-        println!("Parser error");
+
+        Err(e) => {
+            println!("{:?}", e);
+        }
     }
 
     Ok(())
