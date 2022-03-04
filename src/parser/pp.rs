@@ -1,6 +1,6 @@
 use super::ast::*;
 
-use pretty_trait::{block, delimited, Group, JoinExt, Pretty, Sep};
+use pretty_trait::{block, delimited, Group, JoinExt, Pretty, Sep, Newline};
 
 macro_rules! bin_expr (
     ($e1:expr, $e2:expr, $parent_precedence:expr, $op:expr) => (
@@ -97,13 +97,13 @@ impl PrettyPrintable for FunDecl {
     fn to_pretty(self: &Self) -> Box<dyn Pretty> {
         Box::new(
             self.name.to_pretty().join("(").join(
-                delimited(&",", self.params.iter().map(Id::to_pretty))
+                delimited(&", ", self.params.iter().map(Id::to_pretty))
                     .join(")")
                     .join(self.fun_type.to_pretty())
-                    .join(Sep(1))
+                    .join(Newline)
                     .join("{")
                     .join(block(delimited(
-                        &"".join(Sep(1)),
+                        &"".join(Sep(0)),
                         self.statements.iter().map(Statement::to_pretty),
                     )))
                     .join("}"),
@@ -114,9 +114,12 @@ impl PrettyPrintable for FunDecl {
 
 impl PrettyPrintable for FunType {
     fn to_pretty(self: &Self) -> Box<dyn Pretty> {
+        let delim = if self.param_types.is_empty() { "" } else { " " };
+
         Box::new(
             delimited(&" ", self.param_types.iter().map(Type::to_pretty))
-                .join(" -> ")
+                .join(delim)
+                .join("-> ")
                 .join(self.return_type.to_pretty()),
         )
     }
@@ -260,7 +263,7 @@ impl PrettyPrintable for Expr {
 impl PrettyPrintable for Atom {
     fn to_pretty(self: &Self) -> Box<dyn Pretty> {
         match self {
-            Atom::IntLiteral(i) => Box::new(i.to_string()),
+            Atom::IntLiteral(i) => Box::new(i.to_str_radix(10)),
             Atom::BoolLiteral(b) => Box::new(match b {
                 true => String::from("True"),
                 false => String::from("False"),
