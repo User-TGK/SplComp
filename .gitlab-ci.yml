@@ -27,5 +27,7 @@ variables:
 # Use cargo to test the project
 test:cargo:
   script:
+    - cargo install cargo-tarpaulin -f
     - rustc --version && cargo --version  # Print version info for debugging
-    - cargo test --workspace --verbose
+    - cargo tarpaulin -v
+  coverage: '/^\d+.\d+% coverage/'
