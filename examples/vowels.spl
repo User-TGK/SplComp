@@ -1,0 +1,17 @@
+isVowel(c) :: Char -> Bool
+{
+    if ( c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u' ) {
+        return True;
+    }
+
+    return False;
+}
+
+main() :: -> Void
+{
+    // True
+    print(isVowel('a'));
+
+    // False
+    print(isVowel('b'));
+}
