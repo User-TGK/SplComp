@@ -1,0 +1,22 @@
+// Compute the sum of the first n natural numbers.
+sum(n) :: Int -> Int
+{
+    var total = 0;
+
+    while(n > 0) {
+        total = total + n;
+
+        n = n - 1;
+    }
+
+    return total;
+}
+
+main() :: -> Void
+{
+    // 15
+    print(sum(5));
+
+    // 5050
+    print(sum(100));
+}
