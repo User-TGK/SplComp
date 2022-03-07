@@ -429,7 +429,8 @@ fn unary_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
 fn atom_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     alt((
         // '(' Expr ')'
-        delimited(opening_paren_parser, expr_parser, closing_paren_parser),
+        // '(' Expr ',' Expr ')'
+        tuple_parenthesized_expr_parser,
         // FunCall
         map(fun_call_parser, |f| Expr::Atom(Atom::FunCall(f))),
         // id [Field]
@@ -438,9 +439,21 @@ fn atom_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
         map(literal_atom_parser, Expr::Atom),
         // '[]'
         map(empty_list_parser, |_| Expr::Atom(Atom::EmptyList)),
-        // '(' Expr ',' Expr ')'
-        map(tuple_atom_parser, Expr::Atom),
     ))(tokens)
+}
+
+fn tuple_parenthesized_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+    let (rest, expr) = preceded(opening_paren_parser, expr_parser)(tokens)?;
+
+    let res = alt((
+        map(closing_paren_parser, |_| expr.clone()),
+        map(
+            delimited(comma_parser, expr_parser, closing_paren_parser),
+            |expr2| Expr::Atom(Atom::Tuple(Box::new(expr.clone()), Box::new(expr2))),
+        ),
+    ))(rest);
+
+    res
 }
 
 fn identifier_parser(tokens: Tokens) -> IResult<Tokens, Id> {
@@ -500,18 +513,5 @@ fn fun_call_parser(tokens: Tokens) -> IResult<Tokens, FunCall> {
             closing_paren_parser,
         )),
         |(id, _, args, _)| FunCall::new(id, args),
-    )(tokens)
-}
-
-fn tuple_atom_parser(tokens: Tokens) -> IResult<Tokens, Atom> {
-    map(
-        tuple((
-            opening_paren_parser,
-            expr_parser,
-            comma_parser,
-            expr_parser,
-            closing_paren_parser,
-        )),
-        |(_, e1, _, e2, _)| Atom::Tuple(Box::new(e1), Box::new(e2)),
     )(tokens)
 }

@@ -1,6 +1,6 @@
 use super::ast::*;
 
-use pretty_trait::{block, delimited, Group, JoinExt, Pretty, Sep, Newline};
+use pretty_trait::{block, delimited, Group, JoinExt, Newline, Pretty, Sep};
 
 macro_rules! bin_expr (
     ($e1:expr, $e2:expr, $parent_precedence:expr, $op:expr) => (
@@ -37,7 +37,7 @@ fn precedence(expr: &Expr) -> i32 {
 }
 
 fn should_be_paranthesized(expr: &Expr, parent_precedence: i32) -> bool {
-    return precedence(expr) < parent_precedence;
+    precedence(expr) < parent_precedence
 }
 
 pub trait PrettyPrintable {
@@ -45,7 +45,7 @@ pub trait PrettyPrintable {
 }
 
 impl PrettyPrintable for Program {
-    fn to_pretty(self: &Self) -> Box<dyn Pretty> {
+    fn to_pretty(&self) -> Box<dyn Pretty> {
         Box::new(delimited(
             &"".join(Sep(1)).join(Sep(1)),
             self.0.iter().map(Decl::to_pretty),
@@ -54,7 +54,7 @@ impl PrettyPrintable for Program {
 }
 
 impl PrettyPrintable for Decl {
-    fn to_pretty(self: &Self) -> Box<dyn Pretty> {
+    fn to_pretty(&self) -> Box<dyn Pretty> {
         match self {
             Decl::VarDecl(v) => v.to_pretty(),
             Decl::FunDecl(f) => f.to_pretty(),
@@ -63,7 +63,7 @@ impl PrettyPrintable for Decl {
 }
 
 impl PrettyPrintable for Option<Type> {
-    fn to_pretty(self: &Self) -> Box<dyn Pretty> {
+    fn to_pretty(&self) -> Box<dyn Pretty> {
         match self {
             Some(t) => Box::new(t.to_pretty().join(" ")),
             None => Box::new("var "),
@@ -72,7 +72,7 @@ impl PrettyPrintable for Option<Type> {
 }
 
 impl PrettyPrintable for VarDecl {
-    fn to_pretty(self: &Self) -> Box<dyn Pretty> {
+    fn to_pretty(&self) -> Box<dyn Pretty> {
         Box::new(
             self.var_type
                 .to_pretty()
@@ -85,7 +85,7 @@ impl PrettyPrintable for VarDecl {
 }
 
 impl PrettyPrintable for Option<FunType> {
-    fn to_pretty(self: &Self) -> Box<dyn Pretty> {
+    fn to_pretty(&self) -> Box<dyn Pretty> {
         match self {
             Some(t) => Box::new(" :: ".join(t.to_pretty())),
             None => Box::new("".join("")),
@@ -94,7 +94,7 @@ impl PrettyPrintable for Option<FunType> {
 }
 
 impl PrettyPrintable for FunDecl {
-    fn to_pretty(self: &Self) -> Box<dyn Pretty> {
+    fn to_pretty(&self) -> Box<dyn Pretty> {
         Box::new(
             self.name.to_pretty().join("(").join(
                 delimited(&", ", self.params.iter().map(Id::to_pretty))
@@ -113,7 +113,7 @@ impl PrettyPrintable for FunDecl {
 }
 
 impl PrettyPrintable for FunType {
-    fn to_pretty(self: &Self) -> Box<dyn Pretty> {
+    fn to_pretty(&self) -> Box<dyn Pretty> {
         let delim = if self.param_types.is_empty() { "" } else { " " };
 
         Box::new(
@@ -126,7 +126,7 @@ impl PrettyPrintable for FunType {
 }
 
 impl PrettyPrintable for ReturnType {
-    fn to_pretty(self: &Self) -> Box<dyn Pretty> {
+    fn to_pretty(&self) -> Box<dyn Pretty> {
         match self {
             ReturnType::Type(t) => t.to_pretty(),
             ReturnType::Void => Box::new("Void"),
@@ -135,13 +135,13 @@ impl PrettyPrintable for ReturnType {
 }
 
 impl PrettyPrintable for Id {
-    fn to_pretty(self: &Self) -> Box<dyn Pretty> {
+    fn to_pretty(&self) -> Box<dyn Pretty> {
         Box::new(self.0.to_string())
     }
 }
 
 impl PrettyPrintable for Type {
-    fn to_pretty(self: &Self) -> Box<dyn Pretty> {
+    fn to_pretty(&self) -> Box<dyn Pretty> {
         match self {
             Type::Int => Box::new("Int"),
             Type::Bool => Box::new("Bool"),
@@ -159,7 +159,7 @@ impl PrettyPrintable for Type {
 }
 
 impl PrettyPrintable for Statement {
-    fn to_pretty(self: &Self) -> Box<dyn Pretty> {
+    fn to_pretty(&self) -> Box<dyn Pretty> {
         match self {
             Statement::If(i) => i.to_pretty(),
             Statement::While(w) => w.to_pretty(),
@@ -191,7 +191,7 @@ fn to_pretty_else_case(false_body: &Vec<Statement>) -> Box<dyn Pretty> {
 }
 
 impl PrettyPrintable for If {
-    fn to_pretty(self: &Self) -> Box<dyn Pretty> {
+    fn to_pretty(&self) -> Box<dyn Pretty> {
         Box::new(
             "if (".join(self.cond.to_pretty()).join(") {").join(
                 block(delimited(
@@ -206,7 +206,7 @@ impl PrettyPrintable for If {
 }
 
 impl PrettyPrintable for While {
-    fn to_pretty(self: &Self) -> Box<dyn Pretty> {
+    fn to_pretty(&self) -> Box<dyn Pretty> {
         Box::new(
             "while (".join(
                 self.cond
@@ -223,7 +223,7 @@ impl PrettyPrintable for While {
 }
 
 impl PrettyPrintable for Assign {
-    fn to_pretty(self: &Self) -> Box<dyn Pretty> {
+    fn to_pretty(&self) -> Box<dyn Pretty> {
         Box::new(
             self.target
                 .to_pretty()
@@ -235,8 +235,8 @@ impl PrettyPrintable for Assign {
 }
 
 impl PrettyPrintable for Expr {
-    fn to_pretty(self: &Self) -> Box<dyn Pretty> {
-        let precedence = precedence(&self);
+    fn to_pretty(&self) -> Box<dyn Pretty> {
+        let precedence = precedence(self);
 
         match self {
             Expr::Or(e1, e2) => bin_expr!(e1, e2, precedence, " || "),
@@ -261,7 +261,7 @@ impl PrettyPrintable for Expr {
 }
 
 impl PrettyPrintable for Atom {
-    fn to_pretty(self: &Self) -> Box<dyn Pretty> {
+    fn to_pretty(&self) -> Box<dyn Pretty> {
         match self {
             Atom::IntLiteral(i) => Box::new(i.to_str_radix(10)),
             Atom::BoolLiteral(b) => Box::new(match b {
@@ -285,7 +285,7 @@ impl PrettyPrintable for Atom {
 }
 
 impl PrettyPrintable for FunCall {
-    fn to_pretty(self: &Self) -> Box<dyn Pretty> {
+    fn to_pretty(&self) -> Box<dyn Pretty> {
         Box::new(Group::new(
             self.name.0.to_string().join("(").join(
                 block(delimited(
@@ -299,7 +299,7 @@ impl PrettyPrintable for FunCall {
 }
 
 impl PrettyPrintable for Variable {
-    fn to_pretty(self: &Self) -> Box<dyn Pretty> {
+    fn to_pretty(&self) -> Box<dyn Pretty> {
         Box::new(self.name.0.to_string().join(self.fields.iter().fold(
             String::new(),
             |mut acc, field| {
