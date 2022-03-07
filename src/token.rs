@@ -50,7 +50,7 @@ impl<'a> InputTake for Tokens<'a> {
 impl<'a> Slice<Range<usize>> for Tokens<'a> {
     fn slice(&self, range: Range<usize>) -> Self {
         Tokens {
-            inner: self.inner.slice(range.clone()),
+            inner: self.inner.slice(range),
         }
     }
 }
