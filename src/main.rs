@@ -3,6 +3,8 @@ use group3::parser::*;
 use group3::scanner::Scanner;
 use group3::token::{Token, Tokens};
 
+use nom::Finish;
+use nom::error::VerboseErrorKind;
 use pretty_trait::to_string;
 
 use std::error::Error;
@@ -30,7 +32,17 @@ pub fn main() -> Result<(), Box<dyn Error>> {
                 println!("// Successfully parsed input file.");
                 println!("{}", to_string(&ast.to_pretty(), max_line, tab_size));
             } else {
-                println!("Parser did not complete, remaining tokens: {:?}", t);
+                match program_parser(t).finish() {
+                    Ok(_) => {
+                        // There was unparsed input, so we know parsing went wrong somewhere
+                        unreachable!();
+                    }
+                    Err(err) => {
+                        for (r, e) in err.errors {
+                            eprintln!("{:?} at {},{}", e, r[0].line+1, r[0].column+1);
+                        }
+                    }
+                }
             }
         }
 

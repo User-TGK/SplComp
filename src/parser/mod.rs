@@ -10,85 +10,88 @@ use ast::*;
 use nom::branch::alt;
 use nom::bytes::complete::take;
 use nom::combinator::{map, opt, verify};
-use nom::error::{Error, ErrorKind};
+use nom::error::{context, Error, ErrorKind, VerboseError, ParseError};
 use nom::multi::{fold_many0, many0, many1, many_till, separated_list0};
 use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
 use nom::{Err, IResult};
 
 macro_rules! token_parser (
-    ($name:ident, $kind:expr) => (
-        fn $name(tokens: Tokens) -> IResult<Tokens, Tokens> {
-            verify(take(1usize), |t: &Tokens| {
-                t[0].kind == $kind}
+    ($name:ident, $kind:expr, $text:expr) => (
+        fn $name(tokens: Tokens) -> IResult<Tokens, Tokens, VerboseError<Tokens>> {
+            context(
+                $text,
+                verify(take(1usize), |t: &Tokens| {
+                    t[0].kind == $kind
+                })
             )(tokens)
         }
     )
 );
 
-token_parser!(var_parser, TokenKind::Var);
-token_parser!(assignment_parser, TokenKind::Assignment);
-token_parser!(semicolon_parser, TokenKind::Semicolon);
-token_parser!(opening_brace_parser, TokenKind::OpeningBrace);
-token_parser!(closing_brace_parser, TokenKind::ClosingBrace);
+token_parser!(var_parser, TokenKind::Var, "var");
+token_parser!(assignment_parser, TokenKind::Assignment, "=");
+token_parser!(semicolon_parser, TokenKind::Semicolon, ";");
+token_parser!(opening_brace_parser, TokenKind::OpeningBrace, "{");
+token_parser!(closing_brace_parser, TokenKind::ClosingBrace, "}");
 
-token_parser!(double_colon_parser, TokenKind::DoubleColon);
-token_parser!(right_arrow_parser, TokenKind::RightArrow);
+token_parser!(double_colon_parser, TokenKind::DoubleColon, "::");
+token_parser!(right_arrow_parser, TokenKind::RightArrow, "->");
 
-token_parser!(int_type_parser, TokenKind::IntType);
-token_parser!(bool_type_parser, TokenKind::BoolType);
-token_parser!(char_type_parser, TokenKind::CharType);
-token_parser!(void_type_parser, TokenKind::VoidType);
+token_parser!(int_type_parser, TokenKind::IntType, "Int");
+token_parser!(bool_type_parser, TokenKind::BoolType, "Bool");
+token_parser!(char_type_parser, TokenKind::CharType, "Char");
+token_parser!(void_type_parser, TokenKind::VoidType, "Void");
 
-token_parser!(opening_square_parser, TokenKind::OpeningSquare);
-token_parser!(closing_square_parser, TokenKind::ClosingSquare);
+token_parser!(opening_square_parser, TokenKind::OpeningSquare, "[");
+token_parser!(closing_square_parser, TokenKind::ClosingSquare, "]");
 
-token_parser!(if_parser, TokenKind::If);
-token_parser!(else_parser, TokenKind::Else);
-token_parser!(while_parser, TokenKind::While);
-token_parser!(return_parser, TokenKind::Return);
+token_parser!(if_parser, TokenKind::If, "if");
+token_parser!(else_parser, TokenKind::Else, "else");
+token_parser!(while_parser, TokenKind::While, "while");
+token_parser!(return_parser, TokenKind::Return, "return");
 
 // Non-terminal Disjun
-token_parser!(or_parser, TokenKind::Or);
+token_parser!(or_parser, TokenKind::Or, "||");
 
 // Non-terminal Conjun
-token_parser!(and_parser, TokenKind::And);
+token_parser!(and_parser, TokenKind::And, "&&");
 
 // Non-terminal Compare
-token_parser!(equals_parser, TokenKind::Equals);
-token_parser!(not_equals_parser, TokenKind::NotEquals);
-token_parser!(lt_parser, TokenKind::Lt);
-token_parser!(le_parser, TokenKind::Le);
-token_parser!(gt_parser, TokenKind::Gt);
-token_parser!(ge_parser, TokenKind::Ge);
+token_parser!(equals_parser, TokenKind::Equals, "==");
+token_parser!(not_equals_parser, TokenKind::NotEquals, "!=");
+token_parser!(lt_parser, TokenKind::Lt, "<");
+token_parser!(le_parser, TokenKind::Le, "<=");
+token_parser!(gt_parser, TokenKind::Gt, ">");
+token_parser!(ge_parser, TokenKind::Ge, ">=");
 
 // Non-terminal Concat
-token_parser!(cons_parser, TokenKind::Cons);
+token_parser!(cons_parser, TokenKind::Cons, ":");
 
 // Non-terminal Term
-token_parser!(plus_parser, TokenKind::Plus);
-token_parser!(minus_parser, TokenKind::Minus);
+token_parser!(plus_parser, TokenKind::Plus, "+");
+token_parser!(minus_parser, TokenKind::Minus, "-");
 
 // Non-terminal Factor
-token_parser!(times_parser, TokenKind::Times);
-token_parser!(divide_parser, TokenKind::Divide);
-token_parser!(modulo_parser, TokenKind::Modulo);
+token_parser!(times_parser, TokenKind::Times, "*");
+token_parser!(divide_parser, TokenKind::Divide, "/");
+token_parser!(modulo_parser, TokenKind::Modulo, "%");
 
 // Non-terminal Unary
-token_parser!(not_parser, TokenKind::Not);
+token_parser!(not_parser, TokenKind::Not, "!");
 
 // Non-terminal Atom
-token_parser!(opening_paren_parser, TokenKind::OpeningParen);
-token_parser!(closing_paren_parser, TokenKind::ClosingParen);
-token_parser!(empty_list_parser, TokenKind::EmptyList);
-token_parser!(comma_parser, TokenKind::Comma);
+token_parser!(opening_paren_parser, TokenKind::OpeningParen, "(");
+token_parser!(closing_paren_parser, TokenKind::ClosingParen, ")");
+token_parser!(empty_list_parser, TokenKind::EmptyList, "[]");
+token_parser!(comma_parser, TokenKind::Comma, ",");
 
 // Non-terminal Field
-token_parser!(hd_parser, TokenKind::Hd);
-token_parser!(tl_parser, TokenKind::Tl);
-token_parser!(fst_parser, TokenKind::Fst);
-token_parser!(snd_parser, TokenKind::Snd);
+token_parser!(hd_parser, TokenKind::Hd, ".hd");
+token_parser!(tl_parser, TokenKind::Tl, ".tl");
+token_parser!(fst_parser, TokenKind::Fst, ".fst");
+token_parser!(snd_parser, TokenKind::Snd, ".snd");
 
-pub fn program_parser(tokens: Tokens) -> IResult<Tokens, Program> {
+pub fn program_parser(tokens: Tokens) -> IResult<Tokens, Program, VerboseError<Tokens>> {
     map(
         many1(alt((
             map(var_decl_parser, Decl::VarDecl),
@@ -99,7 +102,7 @@ pub fn program_parser(tokens: Tokens) -> IResult<Tokens, Program> {
 }
 
 /// Parses a tuple type, ie. "(" type "," type ")".
-fn tuple_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
+fn tuple_type_parser(tokens: Tokens) -> IResult<Tokens, Type, VerboseError<Tokens>> {
     map(
         delimited(
             opening_paren_parser,
@@ -110,7 +113,7 @@ fn tuple_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
     )(tokens)
 }
 
-fn function_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
+fn function_type_parser(tokens: Tokens) -> IResult<Tokens, Type, VerboseError<Tokens>> {
     map(
         tuple((
             double_colon_parser,
@@ -123,7 +126,7 @@ fn function_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
 }
 
 /// Parses an array type, ie. "[" type "]".
-fn array_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
+fn array_type_parser(tokens: Tokens) -> IResult<Tokens, Type, VerboseError<Tokens>> {
     map(
         delimited(opening_square_parser, type_parser, closing_square_parser),
         |t| Type::List(Box::new(t)),
@@ -131,7 +134,7 @@ fn array_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
 }
 
 /// Parses a type.
-fn type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
+fn type_parser(tokens: Tokens) -> IResult<Tokens, Type, VerboseError<Tokens>> {
     alt((
         map(int_type_parser, |_| Type::Int),
         map(bool_type_parser, |_| Type::Bool),
@@ -145,12 +148,12 @@ fn type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
 }
 
 /// Parses the type of a variable declaration, either "var" or a type.
-fn var_decl_type_parser(tokens: Tokens) -> IResult<Tokens, Option<Type>> {
+fn var_decl_type_parser(tokens: Tokens) -> IResult<Tokens, Option<Type>, VerboseError<Tokens>> {
     alt((map(var_parser, |_| None), map(type_parser, Some)))(tokens)
 }
 
 /// Parses a variable declaration.
-fn var_decl_parser(tokens: Tokens) -> IResult<Tokens, VarDecl> {
+fn var_decl_parser(tokens: Tokens) -> IResult<Tokens, VarDecl, VerboseError<Tokens>> {
     map(
         tuple((
             var_decl_type_parser,
@@ -168,7 +171,7 @@ fn var_decl_parser(tokens: Tokens) -> IResult<Tokens, VarDecl> {
 }
 
 /// Parses a function declaration.
-fn fun_decl_parser(tokens: Tokens) -> IResult<Tokens, FunDecl> {
+fn fun_decl_parser(tokens: Tokens) -> IResult<Tokens, FunDecl, VerboseError<Tokens>> {
     map(
         tuple((
             identifier_parser,
@@ -193,7 +196,7 @@ fn fun_decl_parser(tokens: Tokens) -> IResult<Tokens, FunDecl> {
     )(tokens)
 }
 
-fn if_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
+fn if_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, VerboseError<Tokens>> {
     map(
         tuple((
             if_parser,
@@ -222,7 +225,7 @@ fn if_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
     )(tokens)
 }
 
-fn while_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
+fn while_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, VerboseError<Tokens>> {
     map(
         preceded(
             while_parser,
@@ -239,7 +242,7 @@ fn while_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
     )(tokens)
 }
 
-fn assign_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
+fn assign_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, VerboseError<Tokens>> {
     map(
         tuple((
             pair(identifier_parser, field_parser),
@@ -256,21 +259,21 @@ fn assign_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
     )(tokens)
 }
 
-fn fun_call_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
+fn fun_call_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, VerboseError<Tokens>> {
     map(
         terminated(fun_call_parser, semicolon_parser),
         Statement::FunCall,
     )(tokens)
 }
 
-fn return_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
+fn return_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, VerboseError<Tokens>> {
     map(
         delimited(return_parser, opt(expr_parser), semicolon_parser),
         Statement::Return,
     )(tokens)
 }
 
-fn statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
+fn statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, VerboseError<Tokens>> {
     alt((
         if_statement_parser,
         while_statement_parser,
@@ -281,11 +284,11 @@ fn statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
     ))(tokens)
 }
 
-fn expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, VerboseError<Tokens>> {
     disjun_expr_parser(tokens)
 }
 
-fn disjun_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn disjun_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, VerboseError<Tokens>> {
     let (rest, start) = conjun_expr_parser(tokens)?;
 
     fold_many0(
@@ -295,7 +298,7 @@ fn disjun_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     )(rest)
 }
 
-fn conjun_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn conjun_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, VerboseError<Tokens>> {
     let (rest, start) = compare_expr_parser(tokens)?;
 
     fold_many0(
@@ -305,7 +308,7 @@ fn conjun_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     )(rest)
 }
 
-fn compare_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn compare_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, VerboseError<Tokens>> {
     let (rest, start) = concat_expr_parser(tokens)?;
 
     fold_many0(
@@ -337,7 +340,7 @@ fn compare_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     )(rest)
 }
 
-fn concat_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn concat_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, VerboseError<Tokens>> {
     let (rest, last) = term_expr_parser(tokens)?;
     let (tail, pairs) = many0(tuple((cons_parser, term_expr_parser)))(rest)?;
 
@@ -357,7 +360,7 @@ fn concat_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     }
 }
 
-fn term_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn term_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, VerboseError<Tokens>> {
     let (rest, start) = factor_expr_parser(tokens)?;
 
     fold_many0(
@@ -375,7 +378,7 @@ fn term_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     )(rest)
 }
 
-fn factor_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn factor_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, VerboseError<Tokens>> {
     let (rest, start) = unary_expr_parser(tokens)?;
 
     fold_many0(
@@ -397,7 +400,7 @@ fn factor_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     )(rest)
 }
 
-fn unary_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn unary_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, VerboseError<Tokens>> {
     map(
         many_till(alt((minus_parser, not_parser)), atom_expr_parser),
         |(unary_symbols, atom)| {
@@ -418,7 +421,7 @@ fn unary_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     )(tokens)
 }
 
-fn atom_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn atom_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, VerboseError<Tokens>> {
     alt((
         // '(' Expr ')'
         // '(' Expr ',' Expr ')'
@@ -434,7 +437,7 @@ fn atom_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     ))(tokens)
 }
 
-fn tuple_parenthesized_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn tuple_parenthesized_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, VerboseError<Tokens>> {
     let (rest, expr) = preceded(opening_paren_parser, expr_parser)(tokens)?;
 
     let res = alt((
@@ -448,22 +451,22 @@ fn tuple_parenthesized_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     res
 }
 
-fn identifier_parser(tokens: Tokens) -> IResult<Tokens, Id> {
+fn identifier_parser(tokens: Tokens) -> IResult<Tokens, Id, VerboseError<Tokens>> {
     let (tail, mat) = take(1usize)(tokens)?;
 
     match mat[0].kind {
         TokenKind::Identifier(i) => Ok((tail, Id(i.to_string()))),
-        _ => Err(Err::Error(Error::new(tokens, ErrorKind::Tag))),
+        _ => Err(Err::Error(VerboseError::from_error_kind(tokens, ErrorKind::Tag))),
     }
 }
 
-fn variable_atom_parser(tokens: Tokens) -> IResult<Tokens, Atom> {
+fn variable_atom_parser(tokens: Tokens) -> IResult<Tokens, Atom, VerboseError<Tokens>> {
     map(tuple((identifier_parser, field_parser)), |(id, fields)| {
         Atom::Variable(Variable::new(id, fields))
     })(tokens)
 }
 
-fn field_parser(tokens: Tokens) -> IResult<Tokens, Vec<Field>> {
+fn field_parser(tokens: Tokens) -> IResult<Tokens, Vec<Field>, VerboseError<Tokens>> {
     fold_many0(
         alt((hd_parser, tl_parser, fst_parser, snd_parser)),
         Vec::new,
@@ -482,7 +485,7 @@ fn field_parser(tokens: Tokens) -> IResult<Tokens, Vec<Field>> {
     )(tokens)
 }
 
-fn literal_atom_parser(tokens: Tokens) -> IResult<Tokens, Atom> {
+fn literal_atom_parser(tokens: Tokens) -> IResult<Tokens, Atom, VerboseError<Tokens>> {
     let (tail, mat) = take(1usize)(tokens)?;
 
     let atom = match mat[0].kind {
@@ -490,13 +493,13 @@ fn literal_atom_parser(tokens: Tokens) -> IResult<Tokens, Atom> {
         TokenKind::Char(c) => Atom::CharLiteral(c),
         TokenKind::Integer(ref i) => Atom::IntLiteral(i.clone()),
         TokenKind::String(ref string) => Atom::StringLiteral(string.clone()),
-        _ => return Err(Err::Error(Error::new(tokens, ErrorKind::Tag))),
+        _ => return Err(Err::Error(VerboseError::from_error_kind(tokens, ErrorKind::Tag))),
     };
 
     Ok((tail, atom))
 }
 
-fn fun_call_parser(tokens: Tokens) -> IResult<Tokens, FunCall> {
+fn fun_call_parser(tokens: Tokens) -> IResult<Tokens, FunCall, VerboseError<Tokens>> {
     map(
         tuple((
             identifier_parser,
