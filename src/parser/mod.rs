@@ -10,10 +10,10 @@ use ast::*;
 use nom::branch::alt;
 use nom::bytes::complete::take;
 use nom::combinator::{map, opt, verify};
-use nom::error::{context, Error, ErrorKind, VerboseError, ParseError};
+use nom::error::{context, ErrorKind, VerboseError, ParseError};
 use nom::multi::{fold_many0, many0, many1, many_till, separated_list0};
 use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
-use nom::{Err, IResult};
+use nom::{Err, IResult, Parser};
 
 macro_rules! token_parser (
     ($name:ident, $kind:expr, $text:expr) => (
@@ -90,6 +90,21 @@ token_parser!(hd_parser, TokenKind::Hd, ".hd");
 token_parser!(tl_parser, TokenKind::Tl, ".tl");
 token_parser!(fst_parser, TokenKind::Fst, ".fst");
 token_parser!(snd_parser, TokenKind::Snd, ".snd");
+
+/// Turn a [`nom::Err::Error`] into a [`nom::Err::Failure`] if the given parser fails.
+fn require<'a, P, I, O, E>(mut p: P) -> impl FnMut(I) -> IResult<I, O, E>
+where
+    E: ParseError<I>,
+    P: Parser<I, O, E>
+{
+    move |tokens: I| {
+        match p.parse(tokens) {
+            Ok(res) => Ok(res),
+            Err(Err::Error(e)) => Err(Err::Failure(e)),
+            Err(err) => Err(err),
+        }
+    }
+}
 
 pub fn program_parser(tokens: Tokens) -> IResult<Tokens, Program, VerboseError<Tokens>> {
     map(
@@ -200,18 +215,18 @@ fn if_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, VerboseErro
     map(
         tuple((
             if_parser,
-            delimited(opening_paren_parser, expr_parser, closing_paren_parser),
+            delimited(require(opening_paren_parser), expr_parser, require(closing_paren_parser)),
             delimited(
-                opening_brace_parser,
+                require(opening_brace_parser),
                 many0(statement_parser),
-                closing_brace_parser,
+                require(closing_brace_parser),
             ),
             opt(preceded(
                 else_parser,
                 delimited(
-                    opening_brace_parser,
+                    require(opening_brace_parser),
                     many0(statement_parser),
-                    closing_brace_parser,
+                    require(closing_brace_parser),
                 ),
             )),
         )),

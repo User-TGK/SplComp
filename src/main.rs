@@ -3,8 +3,8 @@ use group3::parser::*;
 use group3::scanner::Scanner;
 use group3::token::{Token, Tokens};
 
-use nom::Finish;
 use nom::error::VerboseErrorKind;
+use nom::{Err, Finish};
 use pretty_trait::to_string;
 
 use std::error::Error;
@@ -39,16 +39,32 @@ pub fn main() -> Result<(), Box<dyn Error>> {
                     }
                     Err(err) => {
                         for (r, e) in err.errors {
-                            eprintln!("{:?} at {},{}", e, r[0].line+1, r[0].column+1);
+                            eprintln!("{:?} at {},{}", e, r[0].line + 1, r[0].column + 1);
                         }
                     }
                 }
             }
         }
 
-        Err(e) => {
-            println!("{:?}", e);
+        Err(Err::Error(e) | Err::Failure(e)) => {
+            for (i, e) in e.errors {
+                let head = &i[0];
+                match e {
+                    VerboseErrorKind::Context(c) => {
+                        eprintln!(
+                            "Error at line {}, column {}: expected {}, found {}",
+                            head.line + 1,
+                            head.column + 1,
+                            c,
+                            head.kind
+                        );
+                    }
+                    _ => {}
+                }
+            }
         }
+
+        _ => unreachable!(),
     }
 
     Ok(())

@@ -4,6 +4,7 @@ use nom::{InputIter, InputLength, InputTake, Needed, Slice};
 
 use num_bigint::BigUint;
 
+use std::fmt;
 use std::iter::Enumerate;
 use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
 
@@ -405,5 +406,63 @@ impl<'a> TokenKind<'a> {
             Self::ClosingSquare => Some(r"\]"),
             Self::Error(_) => None,
         }
+    }
+}
+
+impl<'a> fmt::Display for TokenKind<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            Self::Plus => "+",
+            Self::Minus => "-",
+            Self::Divide => "/",
+            Self::Times => "*",
+            Self::Modulo => "%",
+            Self::Equals => "==",
+            Self::Lt => "<",
+            Self::Gt => ">",
+            Self::Le => "<=",
+            Self::Ge => ">=",
+            Self::NotEquals => "!=",
+            Self::And => "&&",
+            Self::Assignment => "=",
+            Self::Or => "||",
+            Self::Cons => ":",
+            Self::Not => "!",
+            Self::Integer(i) => return write!(f, "{i}"),
+            Self::Bool(b) => {
+                let s = if *b { "True" } else { "False" };
+                return write!(f, "{s}");
+            }
+            Self::Char(c) => return write!(f, "'{c}'"),
+            Self::String(s) => return write!(f, r#""{s}""#),
+            Self::Identifier(i) => i,
+            Self::Var => "var",
+            Self::If => "if",
+            Self::Else => "else",
+            Self::While => "while",
+            Self::Return => "return",
+            Self::IntType => "Int",
+            Self::BoolType => "Bool",
+            Self::CharType => "Char",
+            Self::VoidType => "Void",
+            Self::DoubleColon => "::",
+            Self::RightArrow => "->",
+            Self::Hd => ".hd",
+            Self::Tl => ".tl",
+            Self::Fst => ".fst",
+            Self::Snd => ".snd",
+            Self::EmptyList => "[]",
+            Self::Semicolon => ";",
+            Self::Comma => ",",
+            Self::OpeningParen => "(",
+            Self::ClosingParen => ")",
+            Self::OpeningBrace => "{",
+            Self::ClosingBrace => "}",
+            Self::OpeningSquare => "[",
+            Self::ClosingSquare => "]",
+            Self::Error(e) => return write!(f, "{e:?}"),
+        };
+
+        write!(f, "{s}")
     }
 }
