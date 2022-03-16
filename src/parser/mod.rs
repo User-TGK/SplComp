@@ -2,6 +2,7 @@ mod ast;
 pub mod pp;
 #[cfg(test)]
 mod test;
+mod dtype;
 
 use crate::token::*;
 use ast::*;

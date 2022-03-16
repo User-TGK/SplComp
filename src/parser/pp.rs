@@ -146,6 +146,7 @@ impl PrettyPrintable for Type {
             Type::Int => Box::new("Int"),
             Type::Bool => Box::new("Bool"),
             Type::Char => Box::new("Char"),
+            Type::String => Box::new("String"),
             Type::Tuple(t1, t2) => Box::new(
                 "(".join(t1.to_pretty())
                     .join(",")

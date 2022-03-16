@@ -44,6 +44,7 @@ pub enum Type {
     Int,
     Bool,
     Char,
+    String,
     Tuple(Box<Type>, Box<Type>),
     Array(Box<Type>),
     Generic(Id),
