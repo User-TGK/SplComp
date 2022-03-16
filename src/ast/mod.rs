@@ -1,7 +1,24 @@
+pub mod pp;
+
 use num_bigint::BigUint;
+
+use std::ops::{Deref, DerefMut};
 
 #[derive(PartialEq, Debug)]
 pub struct Program(pub Vec<Decl>);
+
+impl Deref for Program {
+    type Target = Vec<Decl>;
+    fn deref(&self) -> &Vec<Decl> {
+        &self.0
+    }
+}
+
+impl DerefMut for Program {
+    fn deref_mut(&mut self) -> &mut Vec<Decl> {
+        &mut self.0
+    }
+}
 
 #[derive(PartialEq, Debug)]
 pub enum Decl {
@@ -9,8 +26,27 @@ pub enum Decl {
     FunDecl(FunDecl),
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Id(pub String);
+
+impl From<String> for Id {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl Deref for Id {
+    type Target = String;
+    fn deref(&self) -> &String {
+        &self.0
+    }
+}
+
+impl DerefMut for Id {
+    fn deref_mut(&mut self) -> &mut String {
+        &mut self.0
+    }
+}
 
 #[derive(PartialEq, Debug)]
 pub struct VarDecl {
@@ -23,30 +59,20 @@ pub struct VarDecl {
 pub struct FunDecl {
     pub name: Id,
     pub params: Vec<Id>,
-    pub fun_type: Option<FunType>,
+    pub fun_type: Option<Type>,
     pub statements: Vec<Statement>,
 }
 
-#[derive(PartialEq, Debug)]
-pub struct FunType {
-    pub param_types: Vec<Type>,
-    pub return_type: ReturnType,
-}
-
-#[derive(PartialEq, Debug)]
-pub enum ReturnType {
-    Type(Type),
-    Void,
-}
-
-#[derive(PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
     Int,
     Bool,
     Char,
+    Void,
+    Function(Vec<Type>, Box<Type>),
     Tuple(Box<Type>, Box<Type>),
-    Array(Box<Type>),
-    Generic(Id),
+    List(Box<Type>),
+    Var(Id),
 }
 
 #[derive(PartialEq, Debug)]
@@ -141,4 +167,16 @@ pub enum Field {
     Tl,
     Fst,
     Snd,
+}
+
+impl Field {
+    pub fn builtin_identifier(&self) -> Id {
+        String::from(match self {
+            Field::Hd => "hd",
+            Field::Tl => "tl",
+            Field::Fst => "fst",
+            Field::Snd => "snd",
+        })
+        .into()
+    }
 }

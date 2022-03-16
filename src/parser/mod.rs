@@ -1,10 +1,8 @@
-mod ast;
-pub mod pp;
 #[cfg(test)]
 mod test;
 
+use crate::ast::*;
 use crate::token::*;
-use ast::*;
 
 use nom::branch::alt;
 use nom::bytes::complete::take;
@@ -36,7 +34,6 @@ token_parser!(right_arrow_parser, TokenKind::RightArrow);
 token_parser!(int_type_parser, TokenKind::IntType);
 token_parser!(bool_type_parser, TokenKind::BoolType);
 token_parser!(char_type_parser, TokenKind::CharType);
-
 token_parser!(void_type_parser, TokenKind::VoidType);
 
 token_parser!(opening_square_parser, TokenKind::OpeningSquare);
@@ -110,11 +107,23 @@ fn tuple_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
     )(tokens)
 }
 
+fn function_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
+    map(
+        tuple((
+            double_colon_parser,
+            many0(type_parser),
+            right_arrow_parser,
+            type_parser,
+        )),
+        |(_, param_types, _, return_type)| Type::Function(param_types, Box::new(return_type)),
+    )(tokens)
+}
+
 /// Parses an array type, ie. "[" type "]".
 fn array_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
     map(
         delimited(opening_square_parser, type_parser, closing_square_parser),
-        |t| Type::Array(Box::new(t)),
+        |t| Type::List(Box::new(t)),
     )(tokens)
 }
 
@@ -124,9 +133,11 @@ fn type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
         map(int_type_parser, |_| Type::Int),
         map(bool_type_parser, |_| Type::Bool),
         map(char_type_parser, |_| Type::Char),
+        map(void_type_parser, |_| Type::Void),
         tuple_type_parser,
+        function_type_parser,
         array_type_parser,
-        map(identifier_parser, Type::Generic),
+        map(identifier_parser, Type::Var),
     ))(tokens)
 }
 
@@ -153,28 +164,6 @@ fn var_decl_parser(tokens: Tokens) -> IResult<Tokens, VarDecl> {
     )(tokens)
 }
 
-fn fun_ret_type_parser(tokens: Tokens) -> IResult<Tokens, ReturnType> {
-    alt((
-        map(void_type_parser, |_| ReturnType::Void),
-        map(type_parser, ReturnType::Type),
-    ))(tokens)
-}
-
-fn fun_decl_type_parser(tokens: Tokens) -> IResult<Tokens, Option<FunType>> {
-    opt(map(
-        tuple((
-            double_colon_parser,
-            many0(type_parser),
-            right_arrow_parser,
-            fun_ret_type_parser,
-        )),
-        |(_, param_types, _, return_type)| FunType {
-            param_types,
-            return_type,
-        },
-    ))(tokens)
-}
-
 /// Parses a function declaration.
 fn fun_decl_parser(tokens: Tokens) -> IResult<Tokens, FunDecl> {
     map(
@@ -185,7 +174,7 @@ fn fun_decl_parser(tokens: Tokens) -> IResult<Tokens, FunDecl> {
                 separated_list0(comma_parser, identifier_parser),
                 closing_paren_parser,
             ),
-            fun_decl_type_parser,
+            opt(type_parser),
             delimited(
                 opening_brace_parser,
                 many1(statement_parser),
