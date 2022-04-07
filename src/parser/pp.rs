@@ -84,12 +84,10 @@ impl PrettyPrintable for VarDecl {
     }
 }
 
-impl PrettyPrintable for Option<FunType> {
-    fn to_pretty(&self) -> Box<dyn Pretty> {
-        match self {
-            Some(t) => Box::new(" :: ".join(t.to_pretty())),
-            None => Box::new("".join("")),
-        }
+fn pretty_fun_type(ty: &Option<Type>) -> Box<dyn Pretty> {
+    match ty {
+        Some(t) => Box::new(" :: ".join(t.to_pretty())),
+        None => Box::new("".join("")),
     }
 }
 
@@ -99,7 +97,7 @@ impl PrettyPrintable for FunDecl {
             self.name.to_pretty().join("(").join(
                 delimited(&", ", self.params.iter().map(Id::to_pretty))
                     .join(")")
-                    .join(self.fun_type.to_pretty())
+                    .join(pretty_fun_type(&self.fun_type))
                     .join(Newline)
                     .join("{")
                     .join(block(delimited(
@@ -109,28 +107,6 @@ impl PrettyPrintable for FunDecl {
                     .join("}"),
             ),
         )
-    }
-}
-
-impl PrettyPrintable for FunType {
-    fn to_pretty(&self) -> Box<dyn Pretty> {
-        let delim = if self.param_types.is_empty() { "" } else { " " };
-
-        Box::new(
-            delimited(&" ", self.param_types.iter().map(Type::to_pretty))
-                .join(delim)
-                .join("-> ")
-                .join(self.return_type.to_pretty()),
-        )
-    }
-}
-
-impl PrettyPrintable for ReturnType {
-    fn to_pretty(&self) -> Box<dyn Pretty> {
-        match self {
-            ReturnType::Type(t) => t.to_pretty(),
-            ReturnType::Void => Box::new("Void"),
-        }
     }
 }
 
@@ -146,6 +122,7 @@ impl PrettyPrintable for Type {
             Type::Int => Box::new("Int"),
             Type::Bool => Box::new("Bool"),
             Type::Char => Box::new("Char"),
+            Type::Void => Box::new("Void"),
             Type::String => Box::new("String"),
             Type::Tuple(t1, t2) => Box::new(
                 "(".join(t1.to_pretty())
@@ -153,8 +130,18 @@ impl PrettyPrintable for Type {
                     .join(t2.to_pretty())
                     .join(")"),
             ),
-            Type::Array(t) => Box::new("[".join(t.to_pretty()).join("]")),
-            Type::Generic(id) => Box::new(id.to_pretty()),
+            Type::Function(args, return_type) => {
+                let delim = if args.is_empty() { "" } else { " " };
+
+                Box::new(
+                    delimited(&" ", args.iter().map(Type::to_pretty))
+                        .join(delim)
+                        .join("-> ")
+                        .join(return_type.to_pretty()),
+                )
+            }
+            Type::List(t) => Box::new("[".join(t.to_pretty()).join("]")),
+            Type::Var(id) => Box::new(id.to_pretty()),
         }
     }
 }

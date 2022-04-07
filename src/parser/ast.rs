@@ -1,7 +1,22 @@
 use num_bigint::BigUint;
 
+use std::ops::{Deref, DerefMut};
+
 #[derive(PartialEq, Debug)]
 pub struct Program(pub Vec<Decl>);
+
+impl Deref for Program {
+    type Target = Vec<Decl>;
+    fn deref(&self) -> &Vec<Decl> {
+        &self.0
+    }
+}
+
+impl DerefMut for Program {
+    fn deref_mut(&mut self) -> &mut Vec<Decl> {
+        &mut self.0
+    }
+}
 
 #[derive(PartialEq, Debug)]
 pub enum Decl {
@@ -9,7 +24,7 @@ pub enum Decl {
     FunDecl(FunDecl),
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Id(pub String);
 
 #[derive(PartialEq, Debug)]
@@ -23,31 +38,22 @@ pub struct VarDecl {
 pub struct FunDecl {
     pub name: Id,
     pub params: Vec<Id>,
-    pub fun_type: Option<FunType>,
+    pub fun_type: Option<Type>,
     pub statements: Vec<Statement>,
 }
 
-#[derive(PartialEq, Debug)]
-pub struct FunType {
-    pub param_types: Vec<Type>,
-    pub return_type: ReturnType,
-}
-
-#[derive(PartialEq, Debug)]
-pub enum ReturnType {
-    Type(Type),
-    Void,
-}
-
-#[derive(PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
     Int,
     Bool,
     Char,
     String,
+    Void,
+    Function(Vec<Type>, Box<Type>),
     Tuple(Box<Type>, Box<Type>),
-    Array(Box<Type>),
-    Generic(Id),
+    List(Box<Type>),
+
+    Var(Id),
 }
 
 #[derive(PartialEq, Debug)]

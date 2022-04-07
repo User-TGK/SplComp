@@ -1,47 +1,30 @@
+use super::ast::*;
+
 use std::ops::{Deref, DerefMut};
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
 };
 
-use super::ast::VarDecl;
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum DataType {
-    Int,
-    Bool,
-    Char,
-    String,
-    Function(Box<DataType>, Box<DataType>),
-    Tuple(Box<DataType>, Box<DataType>),
-
-    // LType
-    Array(Box<DataType>),
-
-    // TypeVar
-    Var(TypeVar),
-}
-
-impl DataType {
+impl Type {
     pub fn mgu(&self, other: &Self) -> Result<Subst, String> {
         match (self, other) {
-            (DataType::Int, DataType::Int)
-            | (DataType::Bool, DataType::Bool)
-            | (DataType::Char, DataType::Char)
-            | (DataType::String, DataType::String) => Ok(Subst::default()),
+            (Type::Int, Type::Int)
+            | (Type::Bool, Type::Bool)
+            | (Type::Char, Type::Char)
+            | (Type::String, Type::String) => Ok(Subst::default()),
 
-            (DataType::Var(t1), t2) => t1.bind(t2),
-            (t1, DataType::Var(t2)) => t2.bind(t1),
+            (Type::Var(t1), t2) => t1.bind(t2),
+            (t1, Type::Var(t2)) => t2.bind(t1),
 
-            (DataType::Function(t1, t2), DataType::Function(t3, t4))
-            | (DataType::Tuple(t1, t2), DataType::Tuple(t3, t4)) => {
-                let s1 = t1.mgu(t2)?;
-                let s2 = t3.apply(&s1).mgu(&t4.apply(&s1))?;
+            // (Type::Function(t1, t2), Type::Function(t3, t4))
+            // | (Type::Tuple(t1, t2), Type::Tuple(t3, t4)) => {
+            //     let s1 = t1.mgu(t2)?;
+            //     let s2 = t3.apply(&s1).mgu(&t4.apply(&s1))?;
 
-                Ok(s1.compose(s2))
-            }
-
-            (DataType::Array(t1), DataType::Array(t2)) => t1.mgu(&t2),
+            //     Ok(s1.compose(s2))
+            // }
+            (Type::List(t1), Type::List(t2)) => t1.mgu(&t2),
 
             (t1, t2) => Err(String::from(format!(
                 "Unification error: {:?} and {:?}",
@@ -58,19 +41,21 @@ pub struct VarGenerator {
 
 impl VarGenerator {
     pub fn new_var(&mut self) -> TypeVar {
-        let var = TypeVar(self.counter);
+        let var = String::from(format!("t{}", self.counter));
         self.counter += 1;
 
-        var
+        Id(var)
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct TypeVar(usize);
+// #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+// pub struct TypeVar(usize);
+
+type TypeVar = Id;
 
 impl TypeVar {
-    fn bind(&self, ty: &DataType) -> Result<Subst, String> {
-        if let DataType::Var(v) = ty {
+    fn bind(&self, ty: &Type) -> Result<Subst, String> {
+        if let Type::Var(v) = ty {
             if v == self {
                 return Ok(Subst::default());
             }
@@ -92,16 +77,16 @@ impl TypeVar {
 // Finite mapping from type variables to types.
 
 #[derive(Clone, Default)]
-pub struct Subst(HashMap<TypeVar, DataType>);
+pub struct Subst(HashMap<TypeVar, Type>);
 
 impl Deref for Subst {
-    type Target = HashMap<TypeVar, DataType>;
-    fn deref(&self) -> &HashMap<TypeVar, DataType> {
+    type Target = HashMap<TypeVar, Type>;
+    fn deref(&self) -> &HashMap<TypeVar, Type> {
         &self.0
     }
 }
 impl DerefMut for Subst {
-    fn deref_mut(&mut self) -> &mut HashMap<TypeVar, DataType> {
+    fn deref_mut(&mut self) -> &mut HashMap<TypeVar, Type> {
         &mut self.0
     }
 }
@@ -156,42 +141,51 @@ where
     }
 }
 
-impl TypeInstance for DataType {
+impl TypeInstance for Type {
     fn ftv(&self) -> HashSet<TypeVar> {
         match self {
             // Primitive types have no ftv.
-            DataType::Int | DataType::Bool | DataType::Char | DataType::String => HashSet::new(),
+            Type::Int | Type::Bool | Type::Char | Type::String | Type::Void => HashSet::new(),
 
             // A TypeVar has one ftv: itself
-            DataType::Var(t) => HashSet::from([t.to_owned()]),
+            Type::Var(t) => HashSet::from([t.to_owned()]),
 
-            // A function and a tuple have the unification of ftv of the inner types.
-            DataType::Function(a, b) | DataType::Tuple(a, b) => {
-                a.ftv().union(&b.ftv()).copied().collect()
+            // A tuple has the unification of ftv of the inner types.
+            Type::Tuple(a, b) => {
+                a.ftv().union(&b.ftv()).cloned().collect()
+            }
+
+            Type::Function(arg_types, ret_type) => {
+                let mut ftv = ret_type.ftv();
+                for at in arg_types.clone() {
+                    ftv.extend(at.ftv());
+                }
+
+                ftv
             }
 
             // A list has the inner type as ftv.
-            DataType::Array(inner) => inner.ftv(),
+            Type::List(inner) => inner.ftv(),
         }
     }
 
-    fn apply(&self, substitution: &Subst) -> DataType {
+    fn apply(&self, substitution: &Subst) -> Type {
         match self {
-            DataType::Int | DataType::Bool | DataType::Char | DataType::String => self.clone(),
+            Type::Int | Type::Bool | Type::Char | Type::String | Type::Void => self.clone(),
 
-            DataType::Var(t) => substitution.get(t).cloned().unwrap_or(self.clone()),
+            Type::Var(t) => substitution.get(t).cloned().unwrap_or(self.clone()),
 
-            DataType::Function(a, b) => DataType::Function(
+            Type::Function(a, b) => Type::Function(
+                a.iter().map(|t| t.apply(substitution)).collect(),
+                Box::new(b.apply(substitution)),
+            ),
+
+            Type::Tuple(a, b) => Type::Tuple(
                 Box::new(a.apply(substitution)),
                 Box::new(b.apply(substitution)),
             ),
 
-            DataType::Tuple(a, b) => DataType::Tuple(
-                Box::new(a.apply(substitution)),
-                Box::new(b.apply(substitution)),
-            ),
-
-            DataType::Array(inner) => DataType::Array(Box::new(inner.apply(substitution))),
+            Type::List(inner) => Type::List(Box::new(inner.apply(substitution))),
         }
     }
 }
@@ -199,7 +193,7 @@ impl TypeInstance for DataType {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TypeScheme {
     pub ty_vars: Vec<TypeVar>,
-    pub ty: DataType,
+    pub ty: Type,
 }
 
 impl TypeInstance for TypeScheme {
@@ -220,18 +214,15 @@ impl TypeInstance for TypeScheme {
 }
 
 impl TypeScheme {
-    pub fn new(vars: Vec<TypeVar>, ty: DataType) -> Self {
+    pub fn new(vars: Vec<TypeVar>, ty: Type) -> Self {
         Self {
             ty_vars: vars,
             ty: ty,
         }
     }
 
-    fn instantiate(&self, generator: &mut VarGenerator) -> DataType {
-        let newvars = self
-            .ty_vars
-            .iter()
-            .map(|_| DataType::Var(generator.new_var()));
+    fn instantiate(&self, generator: &mut VarGenerator) -> Type {
+        let newvars = self.ty_vars.iter().map(|_| Type::Var(generator.new_var()));
         self.ty
             .apply(&Subst(self.ty_vars.iter().cloned().zip(newvars).collect()))
     }
@@ -260,10 +251,43 @@ impl TypeInstance for TypeEnv {
 }
 
 impl TypeEnv {
-    fn generalize(&self, ty: &DataType) -> TypeScheme {
+    fn generalize(&self, ty: &Type) -> TypeScheme {
         TypeScheme::new(
             ty.ftv().difference(&self.ftv()).cloned().collect(),
             ty.clone(),
         )
     }
+
+    fn ti(
+        &self,
+        d: &Decl,
+        expected: Type,
+        generator: &mut VarGenerator,
+    ) -> Result<(Subst, Type), String> {
+        match d {
+            // VarDecl
+            _ => Err(String::from("Unimplemented")),
+        }
+    }
 }
+
+// pub fn run(program: &mut Program) -> Result<(), String> {
+//     let mut context = TypeEnv::default();
+//     let mut generator = VarGenerator::default();
+
+//     for p in program.iter_mut() {
+//         match p {
+//             Decl::VarDecl(v) => {
+//                 match v.var_type {
+//                     // Type check required.
+//                     Some(t) =>
+//                     // Type inference required.
+//                     None =>
+//                 }
+//             }
+//             Decl::FunDecl(f) => return Err(String::from("Unimplemented")),
+//         }
+//     }
+
+//     Ok(())
+// }
