@@ -17,13 +17,33 @@ impl Type {
             (Type::Var(t1), t2) => t1.bind(t2),
             (t1, Type::Var(t2)) => t2.bind(t1),
 
-            // (Type::Function(t1, t2), Type::Function(t3, t4))
-            // | (Type::Tuple(t1, t2), Type::Tuple(t3, t4)) => {
-            //     let s1 = t1.mgu(t2)?;
-            //     let s2 = t3.apply(&s1).mgu(&t4.apply(&s1))?;
+            (Type::Function(at1, rt1), Type::Function(at2, rt2)) => {
+                let s1 = rt1.mgu(&rt2)?;
+                let mut composed_subst = s1.clone();
 
-            //     Ok(s1.compose(s2))
-            // }
+                if at1.len() != at2.len() {
+                    return Err(String::from(
+                        "Functions with different argument length cannot be unified",
+                    ));
+                }
+
+                let args_to_unify = at1.iter().zip(at2.iter());
+
+                for (t1, t2) in args_to_unify {
+                    let s = t1.apply(&composed_subst).mgu(&t2.apply(&composed_subst))?;
+                    composed_subst = composed_subst.compose(s);
+                }
+
+                Ok(composed_subst)
+            }
+
+            (Type::Tuple(t1, t2), Type::Tuple(t3, t4)) => {
+                let s1 = t1.mgu(t3)?;
+                let s2 = t2.apply(&s1).mgu(&t4.apply(&s1))?;
+
+                Ok(s1.compose(s2))
+            }
+
             (Type::List(t1), Type::List(t2)) => t1.mgu(&t2),
 
             (t1, t2) => Err(String::from(format!(
@@ -57,6 +77,7 @@ impl TypeVar {
     fn bind(&self, ty: &Type) -> Result<Subst, String> {
         if let Type::Var(v) = ty {
             if v == self {
+                println!("Ehh");
                 return Ok(Subst::default());
             }
         }
@@ -70,13 +91,14 @@ impl TypeVar {
 
         let mut s = Subst::default();
         s.insert(self.clone(), ty.clone());
+
         Ok(s)
     }
 }
 
 // Finite mapping from type variables to types.
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Subst(HashMap<TypeVar, Type>);
 
 impl Deref for Subst {
@@ -151,9 +173,7 @@ impl TypeInstance for Type {
             Type::Var(t) => HashSet::from([t.to_owned()]),
 
             // A tuple has the unification of ftv of the inner types.
-            Type::Tuple(a, b) => {
-                a.ftv().union(&b.ftv()).cloned().collect()
-            }
+            Type::Tuple(a, b) => a.ftv().union(&b.ftv()).cloned().collect(),
 
             Type::Function(arg_types, ret_type) => {
                 let mut ftv = ret_type.ftv();
@@ -207,6 +227,7 @@ impl TypeInstance for TypeScheme {
 
     fn apply(&self, s: &Subst) -> TypeScheme {
         let mut filtered_substitution = s.clone();
+
         filtered_substitution.retain(|k, _| !self.ty_vars.contains(k));
 
         Self::new(self.ty_vars.clone(), self.ty.apply(&filtered_substitution))
@@ -228,8 +249,8 @@ impl TypeScheme {
     }
 }
 
-#[derive(Default)]
-pub struct TypeEnv(HashMap<String, TypeScheme>);
+#[derive(Default, Debug)]
+pub struct TypeEnv(HashMap<Id, TypeScheme>);
 
 impl TypeInstance for TypeEnv {
     fn ftv(&self) -> HashSet<TypeVar> {
@@ -250,6 +271,18 @@ impl TypeInstance for TypeEnv {
     }
 }
 
+impl Deref for TypeEnv {
+    type Target = HashMap<Id, TypeScheme>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl DerefMut for TypeEnv {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 impl TypeEnv {
     fn generalize(&self, ty: &Type) -> TypeScheme {
         TypeScheme::new(
@@ -258,36 +291,109 @@ impl TypeEnv {
         )
     }
 
+    // Function M from slides
     fn ti(
         &self,
-        d: &Decl,
-        expected: Type,
+        expr: &Expr,
+        expected: &Type,
         generator: &mut VarGenerator,
-    ) -> Result<(Subst, Type), String> {
-        match d {
-            // VarDecl
+    ) -> Result<Subst, String> {
+        // match d {
+        //     // VarDecl
+        //     _ => Err(String::from("Unimplemented")),
+        // }
+
+        match expr {
+            Expr::Add(e1, e2)
+            | Expr::Sub(e1, e2)
+            | Expr::Mul(e1, e2)
+            | Expr::Div(e1, e2)
+            | Expr::Mod(e1, e2) => {
+                let s1 = self.ti(e1, &Type::Int, generator)?;
+                self.apply(&s1);
+
+                let s2 = self.ti(e2, &Type::Int, generator)?.compose(s1);
+                let expected_applied = expected.apply(&s2);
+
+                Ok(expected_applied.mgu(&Type::Int)?.compose(s2))
+            }
+
+            Expr::Atom(ref a) => match a {
+                // Atom::Variable(v) => {
+                //     // TODO: this doesnt work for field calls on a variable. needs to be extended.
+                //     match self.get(&v.name) {
+                //         Some(s) => Ok((Subst::default(), s.instantiate(generator))),
+
+                //         None => Err(String::from(format!("Unbounded variable: {:?}", v.name))),
+                //     }
+                // },
+                Atom::IntLiteral(_) => expected.mgu(&Type::Int),
+
+                Atom::BoolLiteral(_) => expected.mgu(&Type::Bool),
+
+                _ => Err(String::from("Unimplemented")),
+            },
             _ => Err(String::from("Unimplemented")),
         }
     }
 }
 
-// pub fn run(program: &mut Program) -> Result<(), String> {
-//     let mut context = TypeEnv::default();
-//     let mut generator = VarGenerator::default();
+pub fn run(program: &mut Program) -> Result<(), String> {
+    let mut context = TypeEnv::default();
+    let mut generator = VarGenerator::default();
 
-//     for p in program.iter_mut() {
-//         match p {
-//             Decl::VarDecl(v) => {
-//                 match v.var_type {
-//                     // Type check required.
-//                     Some(t) =>
-//                     // Type inference required.
-//                     None =>
-//                 }
-//             }
-//             Decl::FunDecl(f) => return Err(String::from("Unimplemented")),
-//         }
-//     }
+    for p in program.iter_mut() {
+        match p {
+            Decl::VarDecl(v) => {
+                let fresh = generator.new_var();
 
-//     Ok(())
-// }
+                if let Ok(s) = context.ti(&v.value, &Type::Var(fresh.clone()), &mut generator) {
+                    context.apply(&s);
+                    context.insert(v.name.clone(), TypeScheme::new(vec![], s[&fresh].clone()));
+                }
+
+                // match &v.var_type {
+                //     // Type check required.
+                //     Some(t) => {
+
+                //     }
+                //     // Type inference required.
+                //     None => {
+
+                //     }
+                // }
+            }
+            Decl::FunDecl(f) => return Err(String::from("Unimplemented")),
+        }
+    }
+
+    println!("Context: {:?}", context);
+
+    Ok(())
+}
+
+#[cfg(test)]
+
+mod test {
+
+    use super::*;
+
+    use crate::parser::*;
+    use crate::scanner::*;
+    use crate::token::*;
+
+    #[test]
+    fn test_literal_inference() {
+        const PROGRAM: &str = r"
+            var myInt = 123 + 456;
+        ";
+
+        let tokens: Vec<Token> = Scanner::new(PROGRAM).collect();
+        let tokens = Tokens::new(&tokens);
+
+        let (rest, mut program) = program_parser(tokens).unwrap();
+        assert!(rest.is_empty());
+
+        assert_eq!(Ok(()), run(&mut program));
+    }
+}
