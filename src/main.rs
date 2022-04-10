@@ -3,7 +3,6 @@ use group3::parser::*;
 use group3::scanner::Scanner;
 use group3::token::{Token, Tokens};
 
-use nom::error::VerboseErrorKind;
 use nom::{Err, Finish};
 use pretty_trait::to_string;
 
@@ -23,7 +22,7 @@ pub fn main() -> Result<(), Box<dyn Error>> {
 
     let tokens = Tokens::new(&tokens);
 
-    match program_parser(tokens) {
+    match program_parser(tokens).finish() {
         Ok((t, ast)) => {
             if t.is_empty() {
                 let max_line = Some(40);
@@ -38,33 +37,20 @@ pub fn main() -> Result<(), Box<dyn Error>> {
                         unreachable!();
                     }
                     Err(err) => {
-                        for (r, e) in err.errors {
-                            eprintln!("{:?} at {},{}", e, r[0].line + 1, r[0].column + 1);
-                        }
+                        eprintln!("{:#?}", err);
                     }
                 }
             }
         }
 
-        Err(Err::Error(e) | Err::Failure(e)) => {
-            for (i, e) in e.errors {
-                let head = &i[0];
-                match e {
-                    VerboseErrorKind::Context(c) => {
-                        eprintln!(
-                            "Error at line {}, column {}: expected {}, found {}",
-                            head.line + 1,
-                            head.column + 1,
-                            c,
-                            head.kind
-                        );
-                    }
-                    _ => {}
-                }
+        Err(err) => {
+            if err.input.is_empty() {
+                eprintln!("{:#?}", err);
+            } else {
+                let head = &err.input[0];
+                eprintln!("Error at line {}, column {}: expected {}, found {}", head.line, head.column, err.context.unwrap(), head.kind);
             }
         }
-
-        _ => unreachable!(),
     }
 
     Ok(())
