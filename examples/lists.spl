@@ -1,0 +1,17 @@
+var as = 1 : 2 : [];
+var bs = as : [];
+var cs = bs : [];
+
+var ahd = bs.hd.hd;
+var tps = ('a', 2) : ('b', 4) : [];
+var atl = bs.hd.tl;
+a atl2 = cs.hd.tl;
+
+var fsttpl = tps.hd.fst;
+
+ashd() {
+    var ret_val = bs.hd;
+    c unused = ret_val.hd;
+
+    return ret_val;
+}

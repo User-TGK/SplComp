@@ -1,6 +1,7 @@
-use group3::parser::pp::PrettyPrintable;
+use group3::ast::pp::PrettyPrintable;
 use group3::parser::*;
 use group3::scanner::Scanner;
+use group3::tc::*;
 use group3::token::{Token, Tokens};
 
 use pretty_trait::to_string;
@@ -22,18 +23,17 @@ pub fn main() -> Result<(), Box<dyn Error>> {
     let tokens = Tokens::new(&tokens);
 
     match program_parser(tokens) {
-        Ok((t, ast)) => {
-            if t.is_empty() {
-                let max_line = Some(40);
-                let tab_size = 4;
+        Ok((r, mut program)) => {
+            assert!(r.is_empty());
 
-                println!("// Successfully parsed input file.");
-                println!("{}", to_string(&ast.to_pretty(), max_line, tab_size));
-            } else {
-                println!("Parser did not complete, remaining tokens: {:?}", t);
-            }
+            run(&mut program)?;
+
+            let max_line = Some(40);
+            let tab_size = 4;
+
+            println!("// Successfully parsed and type checked input file.");
+            println!("{}", to_string(&program.to_pretty(), max_line, tab_size));
         }
-
         Err(e) => {
             println!("{:?}", e);
         }

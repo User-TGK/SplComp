@@ -1,0 +1,10 @@
+id(a) :: a -> b {
+    return a;
+}
+
+main() {
+    var i = id(1);
+    var b = id(True);
+
+    return;
+}
