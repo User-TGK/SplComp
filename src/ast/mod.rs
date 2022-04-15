@@ -2,6 +2,7 @@ pub mod pp;
 
 use num_bigint::BigUint;
 
+use std::fmt;
 use std::ops::{Deref, DerefMut};
 
 #[derive(PartialEq, Debug)]
@@ -28,6 +29,12 @@ pub enum Decl {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Id(pub String);
+
+impl fmt::Display for Id {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl From<String> for Id {
     fn from(s: String) -> Self {

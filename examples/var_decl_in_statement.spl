@@ -1,0 +1,7 @@
+f(a) {
+    if (a) {
+        var b = a;
+    } else {
+        var b = !a;
+    }
+}

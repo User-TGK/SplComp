@@ -1,5 +1,5 @@
 [package]
-name = "group3"
+name = "spl-compiler"
 version = "0.1.0"
 edition = "2021"
 
@@ -11,3 +11,5 @@ regex = "1.5.4"
 nom = "^7.1.0"
 num-bigint = "^0.4.3"
 pretty-trait="0.1.2"
+log = { version = "0.4" }
+simple_logger = { version = "2.1.0", default-features = false }

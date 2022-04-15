@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
-use group3::parser::program_parser;
-use group3::scanner::Scanner;
-use group3::token::{Token, Tokens};
+use spl_compiler::parser::program_parser;
+use spl_compiler::scanner::Scanner;
+use spl_compiler::token::{Token, Tokens};
 
 include!(concat!(env!("OUT_DIR"), "/tests_gen.rs"));

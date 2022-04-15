@@ -1,0 +1,13 @@
+var x = 1;
+
+// Disallowed
+// var x = 2;
+
+id(a) {
+    return a;
+}
+
+// Disallowed
+//id(a) {
+//    return a;
+//}
