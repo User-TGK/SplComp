@@ -2,7 +2,9 @@
 mod test;
 
 mod builtin;
+mod return_path_analysis;
 use builtin::Builtin;
+use return_path_analysis::{ReturnPathAnalysis, ReturnType};
 
 use crate::ast::*;
 
@@ -15,9 +17,10 @@ use std::ops::{Deref, DerefMut};
 impl Type {
     pub fn mgu(&self, other: &Self) -> Result<Subst, String> {
         match (self, other) {
-            (Type::Int, Type::Int) | (Type::Bool, Type::Bool) | (Type::Char, Type::Char) => {
-                Ok(Subst::default())
-            }
+            (Type::Int, Type::Int)
+            | (Type::Bool, Type::Bool)
+            | (Type::Char, Type::Char)
+            | (Type::Void, Type::Void) => Ok(Subst::default()),
 
             (Type::Var(t1), t2) => t1.bind(t2),
             (t1, Type::Var(t2)) => t2.bind(t1),
@@ -740,6 +743,18 @@ impl TypeInference for Program {
                 Decl::FunDecl(f) => {
                     if context.functions.contains_key(&f.name) {
                         return Err(format!("Function {} previously declared", f.name));
+                    }
+
+                    let returns = f.check_returns();
+
+                    match returns {
+                        ReturnType::None => {
+                            return Err(format!("Function {} doesn't return", f.name))
+                        }
+                        ReturnType::Incomplete => {
+                            return Err(format!("Function {} has a missing return", f.name))
+                        }
+                        _ => {}
                     }
 
                     let fresh = generator.new_var();
