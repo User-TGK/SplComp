@@ -1,0 +1,7 @@
+var f = 123;
+
+f(f) {
+    var f = 3;
+    var f = True;
+    return f;
+}
