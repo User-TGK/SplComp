@@ -67,6 +67,7 @@ pub struct FunDecl {
     pub name: Id,
     pub params: Vec<Id>,
     pub fun_type: Option<Type>,
+    pub var_decls: Vec<VarDecl>,
     pub statements: Vec<Statement>,
 }
 
@@ -86,7 +87,6 @@ pub enum Type {
 pub enum Statement {
     If(If),
     While(While),
-    VarDecl(VarDecl),
     Assign(Assign),
     FunCall(FunCall),
     Return(Option<Expr>),

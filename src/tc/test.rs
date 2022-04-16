@@ -144,6 +144,39 @@ fn test_infer_identity() {
 }
 
 #[test]
+fn test_void_expr_from_fun_call() {
+    const PROGRAM0: &str = r"
+        fail() {
+            var x = print(1) == print(2);
+
+            return;
+        }
+    ";
+
+    typing_error_test_helper(
+        PROGRAM0,
+        "Function call print in expression would result in void type.",
+    );
+
+    const PROGRAM1: &str = r"
+        voidFun() :: -> Void {
+            return;
+        }
+
+        fail() {
+            var v = voidFun();
+
+            return v;
+        }
+    ";
+
+    typing_error_test_helper(
+        PROGRAM1,
+        "Function call voidFun in expression would result in void type.",
+    );
+}
+
+#[test]
 fn test_missing_return_if() {
     const PROGRAM0: &str = r"
         id(a) {

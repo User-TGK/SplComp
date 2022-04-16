@@ -432,11 +432,6 @@ impl TypeInference for Statement {
 
                 Ok(s3)
             }
-
-            Statement::VarDecl(v) => {
-                let fresh = generator.new_var();
-                v.infer(context, &fresh.into(), generator)
-            }
             Statement::Assign(a) => match context.get_var(&a.target.name) {
                 Some(ts) => a.value.infer(context, &ts.ty, generator),
                 None => Err(format!("Unknown identifier '{}'", a.target.name)),
@@ -516,28 +511,26 @@ impl TypeInference for FunDecl {
 
         let mut subst = expected.mgu(&fun_type)?;
 
-        for s in &mut self.statements {
+        for v in &mut self.var_decls {
             // We do something special here: we need to update our environment (function scope)
             // when we have a local variable.
-            if let Statement::VarDecl(v) = s {
-                if context.global_vars.contains_key(&v.name) {
-                    log::warn!("Local variable '{}' hides global variable.", v.name);
-                }
-
-                let fresh = generator.new_var();
-
-                subst = v
-                    .infer(&context, &fresh.clone().into(), generator)?
-                    .compose(&subst);
-
-                context = context.apply(&subst);
-                context
-                    .local_vars
-                    .insert(v.name.clone(), subst[&fresh].clone().into());
-
-                continue;
+            if context.global_vars.contains_key(&v.name) {
+                log::warn!("Local variable '{}' hides global variable.", v.name);
             }
 
+            let fresh = generator.new_var();
+
+            subst = v
+                .infer(&context, &fresh.clone().into(), generator)?
+                .compose(&subst);
+
+            context = context.apply(&subst);
+            context
+                .local_vars
+                .insert(v.name.clone(), subst[&fresh].clone().into());
+        }
+
+        for s in &mut self.statements {
             subst = s
                 .infer(&context, &beta.apply(&subst), generator)?
                 .compose(&subst);
@@ -679,7 +672,24 @@ impl TypeInference for Expr {
                 Atom::CharLiteral(_) => expected.mgu(&Type::Char),
                 Atom::StringLiteral(_) => expected.mgu(&Type::List(Box::new(Type::Char))),
 
-                Atom::FunCall(f) => f.infer(context, expected, generator),
+                Atom::FunCall(f) => {
+                    if let Type::Var(id) = expected {
+                        let s = f.infer(context, expected, generator)?;
+
+                        if s[id].apply(&s) == Type::Void {
+                            Err(format!(
+                                "Function call {} in expression would result in void type.",
+                                f.name
+                            ))
+                        } else {
+                            Ok(s)
+                        }
+                    } else {
+                        log::error!("Expected type of expr function call was not a type var");
+
+                        f.infer(context, expected, generator)
+                    }
+                }
                 Atom::Variable(v) => v.infer(context, expected, generator),
 
                 Atom::EmptyList => {

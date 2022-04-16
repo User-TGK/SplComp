@@ -64,7 +64,6 @@ impl ReturnPathAnalysis for Statement {
 
             Statement::While(w) => w.body.check_returns(),
 
-            Statement::VarDecl(_) => ReturnType::None,
             Statement::Assign(_) => ReturnType::None,
             Statement::FunCall(_) => ReturnType::None,
             Statement::Return(e) => match e {
