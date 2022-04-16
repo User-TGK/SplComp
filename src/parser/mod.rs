@@ -113,7 +113,7 @@ fn function_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
             double_colon_parser,
             many0(type_parser),
             right_arrow_parser,
-            type_parser,
+            alt((type_parser, map(void_type_parser, |_| Type::Void))),
         )),
         |(_, param_types, _, return_type)| Type::Function(param_types, Box::new(return_type)),
     )(tokens)
@@ -133,7 +133,6 @@ fn type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
         map(int_type_parser, |_| Type::Int),
         map(bool_type_parser, |_| Type::Bool),
         map(char_type_parser, |_| Type::Char),
-        map(void_type_parser, |_| Type::Void),
         tuple_type_parser,
         function_type_parser,
         array_type_parser,
@@ -175,16 +174,18 @@ fn fun_decl_parser(tokens: Tokens) -> IResult<Tokens, FunDecl> {
                 closing_paren_parser,
             ),
             opt(type_parser),
-            delimited(
+            tuple((
                 opening_brace_parser,
+                many0(var_decl_parser),
                 many1(statement_parser),
                 closing_brace_parser,
-            ),
+            )),
         )),
-        |(name, params, fun_type, statements)| FunDecl {
+        |(name, params, fun_type, (_, var_decls, statements, _))| FunDecl {
             name,
             params,
             fun_type,
+            var_decls,
             statements,
         },
     )(tokens)
@@ -271,7 +272,6 @@ fn statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
     alt((
         if_statement_parser,
         while_statement_parser,
-        map(var_decl_parser, Statement::VarDecl),
         assign_statement_parser,
         return_statement_parser,
         fun_call_statement_parser,

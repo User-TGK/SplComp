@@ -189,6 +189,7 @@ fn test_program_parser() {
                 name: Id("myFun".to_string()),
                 params: vec![Id("a".to_string()), Id("b".to_string())],
                 fun_type: None,
+                var_decls: vec![],
                 statements: vec![Statement::Return(None)],
             }),
             Decl::VarDecl(VarDecl {
@@ -479,41 +480,6 @@ fn test_return_statement_parser() {
 }
 
 #[test]
-fn test_var_decl_statement_parser() {
-    const CODE: &str = r"f(x) {
-    if (x) {
-        var y = False;
-    }
-}";
-    let tokens: Vec<Token> = Scanner::new(CODE).collect();
-    let tokens = Tokens::new(&tokens);
-
-    let (rest, fun_decl) = fun_decl_parser(tokens).unwrap();
-
-    assert!(rest.is_empty());
-    assert_eq!(
-        fun_decl,
-        FunDecl {
-            name: Id("f".to_owned()),
-            params: vec![Id("x".to_string())],
-            fun_type: None,
-            statements: vec![Statement::If(If {
-                cond: Expr::Atom(Atom::Variable(Variable::new(
-                    Id("x".to_string()),
-                    Vec::new()
-                ))),
-                if_true: vec![Statement::VarDecl(VarDecl {
-                    var_type: None,
-                    name: Id("y".to_string()),
-                    value: Expr::Atom(Atom::BoolLiteral(false)),
-                })],
-                if_false: Vec::new(),
-            }),]
-        }
-    )
-}
-
-#[test]
 fn test_fun_decl_type_parser() {
     // No params, void return type
 
@@ -576,7 +542,6 @@ fn test_fun_call_in_return() {
     let tokens = Tokens::new(&tokens);
 
     let r1 = program_parser(tokens);
-    println!("r1: {:?}", r1);
 
     let t1 = [];
 
@@ -584,6 +549,7 @@ fn test_fun_call_in_return() {
         name: Id("f".to_string()),
         params: vec![Id("x".to_string())],
         fun_type: None,
+        var_decls: vec![],
         statements: vec![Statement::Return(Some(Expr::Atom(Atom::FunCall(
             FunCall::new(
                 Id(String::from("g")),
@@ -604,7 +570,6 @@ fn test_variable_in_return() {
     let tokens = Tokens::new(&tokens);
 
     let r1 = program_parser(tokens);
-    println!("r1: {:?}", r1);
 
     let t1 = [];
 
@@ -612,12 +577,48 @@ fn test_variable_in_return() {
         name: Id("f".to_string()),
         params: vec![Id("x".to_string())],
         fun_type: None,
+        var_decls: vec![],
         statements: vec![Statement::Return(Some(Expr::Atom(Atom::Variable(
             Variable::new(Id(String::from("g")), vec![]),
         ))))],
     })]);
 
     assert_eq!(r1, Ok((Tokens::new(&t1), expected1)));
+}
+
+#[test]
+fn fest_fun_decl_var_decls_at_start() {
+    let tokens: Vec<Token> = Scanner::new("myFun() { var x = 1; var y = 2; return; }").collect();
+    let tokens = Tokens::new(&tokens);
+
+    let (rest, fun_decl) = fun_decl_parser(tokens).unwrap();
+    assert!(rest.is_empty());
+    assert_eq!(
+        fun_decl,
+        FunDecl {
+            name: Id("myFun".to_string()),
+            params: vec![],
+            fun_type: None,
+            var_decls: vec![
+                VarDecl {
+                    var_type: None,
+                    name: Id("x".to_string()),
+                    value: Expr::Atom(Atom::IntLiteral(1u32.into())),
+                },
+                VarDecl {
+                    var_type: None,
+                    name: Id("y".to_string()),
+                    value: Expr::Atom(Atom::IntLiteral(2u32.into())),
+                }
+            ],
+            statements: vec![Statement::Return(None)],
+        }
+    );
+
+    let tokens: Vec<Token> = Scanner::new("myFun() { var x = 1;  return; var y = 2;}").collect();
+    let tokens = Tokens::new(&tokens);
+
+    assert!(fun_decl_parser(tokens).is_err());
 }
 
 #[test]
@@ -636,6 +637,7 @@ fn test_fun_decl_parser() {
             name: Id("myFun".to_string()),
             params: vec![Id("x".to_string()), Id("y".to_string())],
             fun_type: None,
+            var_decls: vec![],
             statements: vec![Statement::Return(None)],
         }
     );
@@ -662,14 +664,12 @@ fn test_fun_decl_parser() {
                 vec![Type::Int, Type::List(Box::new(Type::Int))],
                 Box::new(Type::List(Box::new(Type::Int)))
             )),
-            statements: vec![
-                Statement::VarDecl(VarDecl {
-                    var_type: Some(Type::Int),
-                    name: Id("someVar".to_string()),
-                    value: Expr::Atom(Atom::IntLiteral(0u32.into())),
-                }),
-                Statement::Return(None),
-            ],
+            var_decls: vec![VarDecl {
+                var_type: Some(Type::Int),
+                name: Id("someVar".to_string()),
+                value: Expr::Atom(Atom::IntLiteral(0u32.into())),
+            }],
+            statements: vec![Statement::Return(None),],
         }
     );
 }
