@@ -142,3 +142,64 @@ fn test_infer_identity() {
 
     typing_success_test_helper(PROGRAM, TYPED_PROGRAM);
 }
+
+#[test]
+fn test_missing_return_if() {
+    const PROGRAM0: &str = r"
+        id(a) {
+            if (a) {
+
+            } else {
+
+            }
+        }
+    ";
+
+    typing_error_test_helper(PROGRAM0, "Function id doesn't return");
+
+    const PROGRAM1: &str = r"
+        id(a) {
+            if (a) {
+                return;
+            } else {
+
+            }
+        }
+    ";
+
+    typing_error_test_helper(PROGRAM1, "Function id has a missing return");
+
+    const PROGRAM2: &str = r"
+        id(a) {
+            if (a) {
+
+            } else {
+                return;
+            }
+        }
+    ";
+
+    typing_error_test_helper(PROGRAM2, "Function id has a missing return");
+
+    const PROGRAM3: &str = r"
+        id(a) {
+            if (a) {
+                return;
+            } else {
+                return;
+            }
+        }
+    ";
+
+    const TYPED_PROGRAM3: &str = r"
+        id(a) :: Bool -> Void {
+            if (a) {
+                return;
+            } else {
+                return;
+            }
+        }
+    ";
+
+    typing_success_test_helper(PROGRAM3, TYPED_PROGRAM3);
+}
