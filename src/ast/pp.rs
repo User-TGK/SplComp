@@ -1,6 +1,6 @@
 use super::*;
 
-use pretty_trait::{block, delimited, Group, JoinExt, Newline, Pretty, Sep};
+use pretty_trait::{block, delimited, Group, Indent, JoinExt, Newline, Pretty, Sep};
 
 macro_rules! bin_expr (
     ($e1:expr, $e2:expr, $parent_precedence:expr, $op:expr) => (
@@ -46,19 +46,17 @@ pub trait PrettyPrintable {
 
 impl PrettyPrintable for Program {
     fn to_pretty(&self) -> Box<dyn Pretty> {
-        Box::new(delimited(
-            &"".join(Sep(1)).join(Sep(1)),
-            self.0.iter().map(Decl::to_pretty),
-        ))
-    }
-}
-
-impl PrettyPrintable for Decl {
-    fn to_pretty(&self) -> Box<dyn Pretty> {
-        match self {
-            Decl::VarDecl(v) => v.to_pretty(),
-            Decl::FunDecl(f) => f.to_pretty(),
-        }
+        Box::new(
+            delimited(
+                &"".join(Sep(1)).join(Sep(1)),
+                self.var_decls.iter().map(VarDecl::to_pretty),
+            )
+            .join(Newline)
+            .join(delimited(
+                &"".join(Sep(1)).join(Sep(1)),
+                self.fun_decls.iter().map(FunDecl::to_pretty),
+            )),
+        )
     }
 }
 
@@ -93,24 +91,44 @@ fn pretty_fun_type(ty: &Option<Type>) -> Box<dyn Pretty> {
 
 impl PrettyPrintable for FunDecl {
     fn to_pretty(&self) -> Box<dyn Pretty> {
-        Box::new(
-            self.name.to_pretty().join("(").join(
-                delimited(&", ", self.params.iter().map(Id::to_pretty))
-                    .join(")")
-                    .join(pretty_fun_type(&self.fun_type))
-                    .join(Newline)
-                    .join("{")
-                    .join(block(delimited(
-                        &"".join(Sep(0)),
-                        self.var_decls.iter().map(VarDecl::to_pretty),
-                    )))
-                    .join(block(delimited(
-                        &"".join(Sep(0)),
-                        self.statements.iter().map(Statement::to_pretty),
-                    )))
-                    .join("}"),
-            ),
-        )
+        if self.var_decls.is_empty() {
+            Box::new(
+                self.name.to_pretty().join("(").join(
+                    delimited(&", ", self.params.iter().map(Id::to_pretty))
+                        .join(")")
+                        .join(pretty_fun_type(&self.fun_type))
+                        .join(Newline)
+                        .join("{")
+                        .join(Indent(Sep(0).join(delimited(
+                            &Sep(1),
+                            self.statements.iter().map(Statement::to_pretty),
+                        ))))
+                        .join(Newline)
+                        .join("}"),
+                ),
+            )
+        } else {
+            Box::new(
+                self.name.to_pretty().join("(").join(
+                    delimited(&", ", self.params.iter().map(Id::to_pretty))
+                        .join(")")
+                        .join(pretty_fun_type(&self.fun_type))
+                        .join(Newline)
+                        .join("{")
+                        .join(Indent(Sep(0).join(delimited(
+                            &Sep(1),
+                            self.var_decls.iter().map(VarDecl::to_pretty),
+                        ))))
+                        .join(Newline)
+                        .join(Indent(Sep(0).join(delimited(
+                            &Sep(1),
+                            self.statements.iter().map(Statement::to_pretty),
+                        ))))
+                        .join(Newline)
+                        .join("}"),
+                ),
+            )
+        }
     }
 }
 

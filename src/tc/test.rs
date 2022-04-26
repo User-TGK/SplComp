@@ -188,7 +188,18 @@ fn test_missing_return_if() {
         }
     ";
 
-    typing_error_test_helper(PROGRAM0, "Function id doesn't return");
+    const TYPED_PROGRAM0: &str = r"
+        id(a) :: Bool -> Void {
+            if (a) {
+
+            } else {
+
+            }
+            return;
+        }
+    ";
+
+    typing_success_test_helper(PROGRAM0, TYPED_PROGRAM0);
 
     const PROGRAM1: &str = r"
         id(a) {

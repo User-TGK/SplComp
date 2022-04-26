@@ -1,0 +1,16 @@
+odd (x) {
+    if (x == 0) {
+        return (False);
+    }
+    else {
+        return even (x - 1);
+    }
+}
+even (x) {
+    if (x == 0) {
+        return (True);
+    }
+    else {
+        return (odd (x - 1));
+    }
+}

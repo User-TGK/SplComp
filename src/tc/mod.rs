@@ -3,8 +3,11 @@ mod test;
 
 mod builtin;
 mod return_path_analysis;
+mod tarjan;
+
 use builtin::Builtin;
-use return_path_analysis::{ReturnPathAnalysis, ReturnType};
+use return_path_analysis::{ReturnPathAnalysis, Returning};
+use tarjan::Preprocess;
 
 use crate::ast::*;
 
@@ -15,6 +18,57 @@ use std::hash::Hash;
 use std::ops::{Deref, DerefMut};
 
 impl Type {
+    /// Determine the most general unifier preserving the most general type,
+    /// while checking that the inferred type (self) is not more general than
+    /// the programmer specified type. In the latter case, we return an error.
+    pub fn mgu_specified(&self, specified: &Self) -> Result<Subst, String> {
+        match (self, specified) {
+            (Type::Int, Type::Int)
+            | (Type::Bool, Type::Bool)
+            | (Type::Char, Type::Char)
+            | (Type::Void, Type::Void) => Ok(Subst::default()),
+            (Type::Var(tv1), Type::Var(tv2)) => tv2.bind(&Type::Var(tv1.clone())),
+            (t1, Type::Var(_)) => Err(format!(
+                "Specified type is more general than actual type {:?}",
+                t1
+            )),
+
+            (Type::Function(at1, rt1), Type::Function(at2, rt2)) => {
+                let s1 = rt1.mgu_specified(rt2)?;
+                let mut composed_subst = s1;
+
+                if at1.len() != at2.len() {
+                    return Err(String::from(
+                        "Functions with different argument length cannot be unified",
+                    ));
+                }
+
+                let args_to_unify = at1.iter().zip(at2.iter());
+
+                for (t1, t2) in args_to_unify {
+                    let s = t1
+                        .apply(&composed_subst)
+                        .mgu_specified(&t2.apply(&composed_subst))?;
+                    composed_subst = composed_subst.compose(&s);
+                }
+
+                Ok(composed_subst)
+            }
+
+            (Type::Tuple(t1, t2), Type::Tuple(t3, t4)) => {
+                let s1 = t1.mgu_specified(t3)?;
+                let s2 = t2.apply(&s1).mgu_specified(&t4.apply(&s1))?;
+
+                Ok(s1.compose(&s2))
+            }
+
+            (Type::List(t1), Type::List(t2)) => t1.mgu_specified(t2),
+
+            (t1, t2) => Err(format!("Unification error: {:?} and {:?}", t1, t2)),
+        }
+    }
+
+    /// Determine the most general unifier between `self` and `other`.
     pub fn mgu(&self, other: &Self) -> Result<Subst, String> {
         match (self, other) {
             (Type::Int, Type::Int)
@@ -463,7 +517,12 @@ impl TypeInference for FunCall {
                     let fresh = generator.new_var();
 
                     let s = a.infer(&context.apply(&sub), &fresh.clone().into(), generator)?;
-                    arg_types.push(s[&fresh].clone());
+                    
+                    if let Some(t) = s.get(&fresh) {
+                        arg_types.push(t.clone());
+                    } else {
+                        arg_types.push(fresh.clone().into());
+                    }
 
                     sub = sub.compose(&s);
                 }
@@ -537,6 +596,12 @@ impl TypeInference for FunDecl {
             context = context.apply(&subst);
         }
 
+        for v in &mut self.var_decls {
+            if let Some(t) = &mut v.var_type {
+                *t = t.apply(&subst);
+            }
+        }
+
         Ok(subst)
     }
 }
@@ -558,7 +623,7 @@ impl TypeInference for VarDecl {
                 // Compose substitution s2 from the infer substitution s,
                 // and the unification of the infered type and specified type.
                 Some(t) => {
-                    let s2 = t.mgu(&infered_var_type)?.compose(&s);
+                    let s2 = infered_var_type.mgu_specified(&t)?.compose(&s);
                     self.var_type = Some(t.apply(&s2));
 
                     Ok(s2)
@@ -676,7 +741,7 @@ impl TypeInference for Expr {
                     if let Type::Var(id) = expected {
                         let s = f.infer(context, expected, generator)?;
 
-                        if s[id].apply(&s) == Type::Void {
+                        if s.contains_key(id) && s[id].apply(&s) == Type::Void {
                             Err(format!(
                                 "Function call {} in expression would result in void type.",
                                 f.name
@@ -685,8 +750,6 @@ impl TypeInference for Expr {
                             Ok(s)
                         }
                     } else {
-                        log::error!("Expected type of expr function call was not a type var");
-
                         f.infer(context, expected, generator)
                     }
                 }
@@ -735,65 +798,98 @@ impl TypeInference for Program {
     ) -> Result<Subst, String> {
         let mut context = context.clone();
 
-        for p in self.iter_mut() {
-            match p {
-                Decl::VarDecl(v) => {
-                    if context.global_vars.contains_key(&v.name) {
-                        return Err(format!("Global variable {} previously declared", v.name));
-                    }
+        // Resort global variables
+        self.resort_vars()?;
 
-                    let fresh = generator.new_var();
-                    let s = v.infer(&context, &fresh.clone().into(), generator)?;
+        // Determine the SCC which must be typed together
+        let scc = self.run_tarjan(&context.functions)?;
 
-                    context.apply(&s);
-                    context
-                        .global_vars
-                        .insert(v.name.clone(), s[&fresh].clone().into());
+        // Infer the type of all global variables
+        for v in &mut self.var_decls {
+            if context.global_vars.contains_key(&v.name) {
+                return Err(format!("Global variable {} previously declared", v.name));
+            }
+
+            let fresh = generator.new_var();
+            let s = v.infer(&context, &fresh.clone().into(), generator)?;
+
+            context.apply(&s);
+            context
+                .global_vars
+                .insert(v.name.clone(), s[&fresh].clone().into());
+        }
+
+        // Binding time analysis and return path analysis
+        for f in &mut self.fun_decls {
+            if context.functions.contains_key(&f.name) {
+                return Err(format!("Function {} previously declared", f.name));
+            }
+
+            let returns = f.check_returns();
+
+            match returns {
+                Returning::NoneImplicit => f.statements.push(Statement::Return(None)),
+                Returning::Incomplete => {
+                    return Err(format!("Function {} has a missing return", f.name))
                 }
-                Decl::FunDecl(f) => {
-                    if context.functions.contains_key(&f.name) {
-                        return Err(format!("Function {} previously declared", f.name));
+                _ => {}
+            }
+        }
+
+        for component in &scc {
+            // let mut context_prime = context.clone();
+            let mut fresh_sequence = vec![];
+
+            let mut subst = Subst::default();
+
+            // Add all functions to the context
+            for i in component {
+                let fresh = generator.new_var();
+                fresh_sequence.push(fresh.clone());
+
+                context.functions.insert(
+                    self.fun_decls[*i].name.clone(),
+                    TypeScheme::new(vec![], fresh.into()),
+                );
+            }
+
+            for (var_index, fun_index) in component.iter().enumerate() {
+                let alpha: Type = fresh_sequence[var_index].clone().into();
+
+                let s = self.fun_decls[*fun_index].infer(
+                    &context.apply(&subst),
+                    &alpha.apply(&subst),
+                    generator,
+                )?;
+
+                subst = subst.compose(&s);
+            }
+
+            context = context.apply(&subst);
+
+            for (var_index, fun_index) in component.iter().enumerate() {
+                let infered_fun_type = subst[&fresh_sequence[var_index]].clone().apply(&subst);
+                let name = self.fun_decls[*fun_index].name.clone();
+
+                match &mut self.fun_decls[*fun_index].fun_type {
+                    Some(t) => {
+                        let s2 = infered_fun_type.mgu_specified(&t)?.compose(&subst);
+                        context.apply(&s2);
+
+                        let generalized = context.functions.generalize(&t.apply(&s2));
+                        context.functions.insert(name, generalized);
+
+                        self.fun_decls[*fun_index].fun_type = Some(t.apply(&s2));
                     }
+                    None => {
+                        context.apply(&subst);
 
-                    let returns = f.check_returns();
+                        let generalized = context
+                            .functions
+                            .generalize(&infered_fun_type.apply(&subst));
+                        context.functions.insert(name, generalized);
 
-                    match returns {
-                        ReturnType::None => {
-                            return Err(format!("Function {} doesn't return", f.name))
-                        }
-                        ReturnType::Incomplete => {
-                            return Err(format!("Function {} has a missing return", f.name))
-                        }
-                        _ => {}
-                    }
-
-                    let fresh = generator.new_var();
-                    let s = f.infer(&context, &fresh.clone().into(), generator)?;
-
-                    let infered_fun_type = s[&fresh].clone().apply(&s);
-
-                    match &f.fun_type {
-                        // We already had a type specified by the programmer.
-                        // Compose substitution s2 from the infer substitution s,
-                        // and the unification of the infered type and specified type.
-                        Some(t) => {
-                            let s2 = t.mgu(&infered_fun_type)?.compose(&s);
-                            context.apply(&s2);
-
-                            let generalized = context.functions.generalize(&t.apply(&s2));
-                            context.functions.insert(f.name.clone(), generalized);
-
-                            f.fun_type = Some(t.apply(&s2));
-                        }
-                        None => {
-                            context.apply(&s);
-
-                            let generalized =
-                                context.functions.generalize(&infered_fun_type.apply(&s));
-                            context.functions.insert(f.name.clone(), generalized);
-
-                            f.fun_type = Some(infered_fun_type.apply(&s));
-                        }
+                        self.fun_decls[*fun_index].fun_type = Some(infered_fun_type.apply(&subst));
                     }
                 }
             }

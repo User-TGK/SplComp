@@ -2,6 +2,13 @@ id(a) :: a -> b {
     return a;
 }
 
+id_int(x) {
+    var a = x;
+    Int b = x;
+    var c = b;
+    return c;
+}
+
 main() {
     var i = id(1);
     var b = id(True);

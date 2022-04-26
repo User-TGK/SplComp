@@ -91,7 +91,22 @@ pub fn program_parser(tokens: Tokens) -> IResult<Tokens, Program> {
             map(var_decl_parser, Decl::VarDecl),
             map(fun_decl_parser, Decl::FunDecl),
         ))),
-        Program,
+        |decls| {
+            let mut var_decls = vec![];
+            let mut fun_decls = vec![];
+
+            for d in decls {
+                match d {
+                    Decl::VarDecl(v) => var_decls.push(v),
+                    Decl::FunDecl(f) => fun_decls.push(f),
+                }
+            }
+
+            Program {
+                var_decls,
+                fun_decls,
+            }
+        },
     )(tokens)
 }
 

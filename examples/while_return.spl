@@ -1,0 +1,14 @@
+while_fun() {
+    while(True) {
+        return;
+    }
+
+    return;
+}
+
+
+if_fun() {
+    if (True) {
+        //return;
+    }
+}
