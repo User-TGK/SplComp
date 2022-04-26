@@ -6,19 +6,9 @@ use std::fmt;
 use std::ops::{Deref, DerefMut};
 
 #[derive(PartialEq, Debug)]
-pub struct Program(pub Vec<Decl>);
-
-impl Deref for Program {
-    type Target = Vec<Decl>;
-    fn deref(&self) -> &Vec<Decl> {
-        &self.0
-    }
-}
-
-impl DerefMut for Program {
-    fn deref_mut(&mut self) -> &mut Vec<Decl> {
-        &mut self.0
-    }
+pub struct Program {
+    pub var_decls: Vec<VarDecl>,
+    pub fun_decls: Vec<FunDecl>,
 }
 
 #[derive(PartialEq, Debug)]
@@ -56,7 +46,7 @@ impl DerefMut for Id {
 }
 
 #[derive(PartialEq, Debug)]
-pub struct VarDecl {
+pub struct  VarDecl {
     pub var_type: Option<Type>,
     pub name: Id,
     pub value: Expr,

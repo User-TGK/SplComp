@@ -1,0 +1,21 @@
+a() {
+    b();
+    return;
+}
+
+b() {
+    c();
+    return;
+}
+
+c() {
+    d();
+}
+
+d() {
+    return;
+}
+
+main() {
+    return;
+}

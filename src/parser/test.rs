@@ -179,25 +179,27 @@ fn test_program_parser() {
     assert!(rest.is_empty());
     assert_eq!(
         program,
-        Program(vec![
-            Decl::VarDecl(VarDecl {
-                var_type: None,
-                name: Id("myVar".to_string()),
-                value: Expr::Atom(Atom::IntLiteral(123u32.into()))
-            }),
-            Decl::FunDecl(FunDecl {
+        Program {
+            var_decls: vec![
+                VarDecl {
+                    var_type: None,
+                    name: Id("myVar".to_string()),
+                    value: Expr::Atom(Atom::IntLiteral(123u32.into()))
+                },
+                VarDecl {
+                    var_type: None,
+                    name: Id("another_var".to_string()),
+                    value: Expr::Atom(Atom::BoolLiteral(false)),
+                },
+            ],
+            fun_decls: vec![FunDecl {
                 name: Id("myFun".to_string()),
                 params: vec![Id("a".to_string()), Id("b".to_string())],
                 fun_type: None,
                 var_decls: vec![],
                 statements: vec![Statement::Return(None)],
-            }),
-            Decl::VarDecl(VarDecl {
-                var_type: None,
-                name: Id("another_var".to_string()),
-                value: Expr::Atom(Atom::BoolLiteral(false)),
-            }),
-        ])
+            }]
+        }
     )
 }
 
@@ -545,21 +547,24 @@ fn test_fun_call_in_return() {
 
     let t1 = [];
 
-    let expected1 = Program(vec![Decl::FunDecl(FunDecl {
-        name: Id("f".to_string()),
-        params: vec![Id("x".to_string())],
-        fun_type: None,
+    let expected1 = Program {
         var_decls: vec![],
-        statements: vec![Statement::Return(Some(Expr::Atom(Atom::FunCall(
-            FunCall::new(
-                Id(String::from("g")),
-                vec![Expr::Atom(Atom::Variable(Variable::new(
-                    Id(String::from("x")),
-                    vec![],
-                )))],
-            ),
-        ))))],
-    })]);
+        fun_decls: vec![FunDecl {
+            name: Id("f".to_string()),
+            params: vec![Id("x".to_string())],
+            fun_type: None,
+            var_decls: vec![],
+            statements: vec![Statement::Return(Some(Expr::Atom(Atom::FunCall(
+                FunCall::new(
+                    Id(String::from("g")),
+                    vec![Expr::Atom(Atom::Variable(Variable::new(
+                        Id(String::from("x")),
+                        vec![],
+                    )))],
+                ),
+            ))))],
+        }],
+    };
 
     assert_eq!(r1, Ok((Tokens::new(&t1), expected1)));
 }
@@ -573,15 +578,18 @@ fn test_variable_in_return() {
 
     let t1 = [];
 
-    let expected1 = Program(vec![Decl::FunDecl(FunDecl {
-        name: Id("f".to_string()),
-        params: vec![Id("x".to_string())],
-        fun_type: None,
+    let expected1 = Program {
         var_decls: vec![],
-        statements: vec![Statement::Return(Some(Expr::Atom(Atom::Variable(
-            Variable::new(Id(String::from("g")), vec![]),
-        ))))],
-    })]);
+        fun_decls: vec![FunDecl {
+            name: Id("f".to_string()),
+            params: vec![Id("x".to_string())],
+            fun_type: None,
+            var_decls: vec![],
+            statements: vec![Statement::Return(Some(Expr::Atom(Atom::Variable(
+                Variable::new(Id(String::from("g")), vec![]),
+            ))))],
+        }],
+    };
 
     assert_eq!(r1, Ok((Tokens::new(&t1), expected1)));
 }

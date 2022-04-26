@@ -14,4 +14,6 @@ main() :: -> Void
 
     // False
     print(isVowel('b'));
+
+    return;
 }

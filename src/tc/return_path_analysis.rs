@@ -1,35 +1,35 @@
 use crate::ast::{FunDecl, Statement};
 
-pub enum ReturnType {
-    None,
-    Some,
+pub enum Returning {
+    NoneExplicit,
+    NoneImplicit,
+    All,
     Incomplete,
-    Void,
 }
 
 pub trait ReturnPathAnalysis {
-    fn check_returns(&self) -> ReturnType;
+    fn check_returns(&self) -> Returning;
 }
 
 impl ReturnPathAnalysis for FunDecl {
-    fn check_returns(&self) -> ReturnType {
+    fn check_returns(&self) -> Returning {
         self.statements.check_returns()
     }
 }
 
 impl ReturnPathAnalysis for Vec<Statement> {
-    fn check_returns(&self) -> ReturnType {
+    fn check_returns(&self) -> Returning {
         let mut incomplete = None;
 
         for s in self {
             let ret = s.check_returns();
 
             match ret {
-                ReturnType::None => {
+                Returning::NoneImplicit => {
                     continue;
                 }
-                ReturnType::Incomplete => {
-                    incomplete = Some(ReturnType::Incomplete);
+                Returning::Incomplete => {
+                    incomplete = Some(Returning::Incomplete);
                 }
                 _ => {
                     return ret;
@@ -39,36 +39,35 @@ impl ReturnPathAnalysis for Vec<Statement> {
 
         match incomplete {
             Some(i) => i,
-            None => ReturnType::None,
+            None => Returning::NoneImplicit,
         }
     }
 }
 
 impl ReturnPathAnalysis for Statement {
-    fn check_returns(&self) -> ReturnType {
+    fn check_returns(&self) -> Returning {
         match self {
             Statement::If(i) => match (i.if_true.check_returns(), i.if_false.check_returns()) {
-                (ReturnType::None, ReturnType::None) => ReturnType::None,
-                (ReturnType::None, _) => ReturnType::Incomplete,
-                (_, ReturnType::None) => ReturnType::Incomplete,
-                (ReturnType::Incomplete, _) => ReturnType::Incomplete,
-                (_, ReturnType::Incomplete) => ReturnType::Incomplete,
-                (ReturnType::Void, ReturnType::Void) => ReturnType::Void,
-                (ReturnType::Some, ReturnType::Some) => ReturnType::Some,
+                (Returning::NoneImplicit, Returning::NoneImplicit) => Returning::NoneImplicit,
+                (Returning::NoneImplicit, _) => Returning::Incomplete,
+                (_, Returning::NoneImplicit) => Returning::Incomplete,
+                (Returning::Incomplete, _) => Returning::Incomplete,
+                (_, Returning::Incomplete) => Returning::Incomplete,
+                (Returning::NoneExplicit, Returning::NoneExplicit) => Returning::NoneExplicit,
+                (Returning::All, Returning::All) => Returning::All,
 
                 // Here we have a type conflict, this will become a proper error from the
                 // type inferencer in the next analysis.
-                (ReturnType::Some, ReturnType::Void) => ReturnType::Some,
-                (ReturnType::Void, ReturnType::Some) => ReturnType::Some,
+                (Returning::All, Returning::NoneExplicit) => Returning::All,
+                (Returning::NoneExplicit, Returning::All) => Returning::All,
             },
 
-            Statement::While(w) => w.body.check_returns(),
-
-            Statement::Assign(_) => ReturnType::None,
-            Statement::FunCall(_) => ReturnType::None,
+            Statement::While(_w) => Returning::NoneImplicit,
+            Statement::Assign(_a) => Returning::NoneImplicit,
+            Statement::FunCall(_f) => Returning::NoneImplicit,
             Statement::Return(e) => match e {
-                Some(_) => ReturnType::Some,
-                None => ReturnType::Void,
+                Some(_) => Returning::All,
+                None => Returning::NoneExplicit,
             },
         }
     }

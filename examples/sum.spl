@@ -19,4 +19,6 @@ main() :: -> Void
 
     // 5050
     print(sum(100));
+
+    return;
 }

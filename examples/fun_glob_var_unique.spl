@@ -1,4 +1,7 @@
+var y = x + 5;
+
 var x = 1;
+
 
 // Disallowed
 // var x = 2;
