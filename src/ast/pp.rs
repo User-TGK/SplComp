@@ -46,17 +46,24 @@ pub trait PrettyPrintable {
 
 impl PrettyPrintable for Program {
     fn to_pretty(&self) -> Box<dyn Pretty> {
-        Box::new(
-            delimited(
-                &"".join(Sep(1)).join(Sep(1)),
-                self.var_decls.iter().map(VarDecl::to_pretty),
-            )
-            .join(Newline)
-            .join(delimited(
+        if self.var_decls.is_empty() {
+            Box::new(delimited(
                 &"".join(Sep(1)).join(Sep(1)),
                 self.fun_decls.iter().map(FunDecl::to_pretty),
-            )),
-        )
+            ))
+        } else {
+            Box::new(
+                delimited(
+                    &"".join(Sep(1)).join(Sep(1)),
+                    self.var_decls.iter().map(VarDecl::to_pretty),
+                )
+                .join(Newline)
+                .join(delimited(
+                    &"".join(Sep(1)).join(Sep(1)),
+                    self.fun_decls.iter().map(FunDecl::to_pretty),
+                )),
+            )
+        }
     }
 }
 

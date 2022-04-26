@@ -28,6 +28,7 @@ impl Type {
             | (Type::Char, Type::Char)
             | (Type::Void, Type::Void) => Ok(Subst::default()),
             (Type::Var(tv1), Type::Var(tv2)) => tv2.bind(&Type::Var(tv1.clone())),
+            (Type::Var(tv), t2) => tv.bind(t2),
             (t1, Type::Var(_)) => Err(format!(
                 "Specified type is more general than actual type {:?}",
                 t1
@@ -64,7 +65,10 @@ impl Type {
 
             (Type::List(t1), Type::List(t2)) => t1.mgu_specified(t2),
 
-            (t1, t2) => Err(format!("Unification error: {:?} and {:?}", t1, t2)),
+            (t1, t2) => Err(format!(
+                "Unification error (inferred/specified): {:?} and {:?}",
+                t1, t2
+            )),
         }
     }
 
@@ -517,7 +521,7 @@ impl TypeInference for FunCall {
                     let fresh = generator.new_var();
 
                     let s = a.infer(&context.apply(&sub), &fresh.clone().into(), generator)?;
-                    
+
                     if let Some(t) = s.get(&fresh) {
                         arg_types.push(t.clone());
                     } else {
@@ -583,10 +587,10 @@ impl TypeInference for FunDecl {
                 .infer(&context, &fresh.clone().into(), generator)?
                 .compose(&subst);
 
-            context = context.apply(&subst);
-            context
-                .local_vars
-                .insert(v.name.clone(), subst[&fresh].clone().into());
+                context = context.apply(&subst);
+                context
+                    .local_vars
+                    .insert(v.name.clone(), subst[&fresh].clone().into());
         }
 
         for s in &mut self.statements {
@@ -616,7 +620,12 @@ impl TypeInference for VarDecl {
         if let Type::Var(v) = expected {
             // Determine the variable type from the expression.
             let s = self.value.infer(context, expected, generator)?;
-            let infered_var_type = s[v].clone().apply(&s);
+
+            let infered_var_type = if let Some(t) = s.get(&v) {
+                t.clone().apply(&s)
+            } else {
+                Into::<Type>::into(v.clone()).apply(&s)
+            };
 
             match &self.var_type {
                 // We already had a type specified by the programmer.
@@ -837,7 +846,7 @@ impl TypeInference for Program {
         }
 
         for component in &scc {
-            // let mut context_prime = context.clone();
+            let mut context_prime = context.clone();
             let mut fresh_sequence = vec![];
 
             let mut subst = Subst::default();
@@ -847,7 +856,7 @@ impl TypeInference for Program {
                 let fresh = generator.new_var();
                 fresh_sequence.push(fresh.clone());
 
-                context.functions.insert(
+                context_prime.functions.insert(
                     self.fun_decls[*i].name.clone(),
                     TypeScheme::new(vec![], fresh.into()),
                 );
@@ -857,7 +866,7 @@ impl TypeInference for Program {
                 let alpha: Type = fresh_sequence[var_index].clone().into();
 
                 let s = self.fun_decls[*fun_index].infer(
-                    &context.apply(&subst),
+                    &context_prime.apply(&subst),
                     &alpha.apply(&subst),
                     generator,
                 )?;

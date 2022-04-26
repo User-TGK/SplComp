@@ -30,7 +30,10 @@ pub fn main() -> Result<(), Box<dyn Error>> {
 
     match program_parser(tokens) {
         Ok((r, mut program)) => {
-            assert!(r.is_empty());
+            if !(r.is_empty()) {
+                println!("{:?}", r);
+                assert!(r.is_empty());
+            }
 
             run(&mut program)?;
 

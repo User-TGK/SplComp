@@ -9,9 +9,9 @@ use std::collections::HashMap;
 
 type DirectedGraph<'a> = Graph<usize, ()>;
 
+/// Trait to preprocess our AST before running type inference.
 pub trait Preprocess {
     fn resort_vars(&mut self) -> Result<(), String>;
-
     fn run_tarjan(&mut self, function_env: &TypeEnv) -> Result<Vec<Vec<usize>>, String>;
 }
 
