@@ -555,7 +555,7 @@ impl TypeInference for FunCall {
                     let s = a.infer(&context.apply(&sub), &fresh.clone().into(), generator)?;
 
                     if let Some(t) = s.get(&fresh) {
-                        arg_types.push(t.clone());
+                        arg_types.push(t.clone() /*.apply(&s)*/);
                     } else {
                         arg_types.push(fresh.clone().into());
                     }
@@ -822,7 +822,19 @@ impl TypeInference for Expr {
     }
 }
 
+impl Context {
+    /// Generalization for new function declarations.
+    fn generalize(&self, ty: &Type) -> TypeScheme {
+        TypeScheme::new(
+            ty.ftv().difference(&self.ftv()).cloned().collect(),
+            ty.clone(),
+        )
+    }
+}
+
 impl TypeEnv {
+    /// Generalization for builtin functions allowing us to only pass a
+    /// single environment of the context.
     fn generalize(&self, ty: &Type) -> TypeScheme {
         TypeScheme::new(
             ty.ftv().difference(&self.ftv()).cloned().collect(),
@@ -918,7 +930,7 @@ impl TypeInference for Program {
                         let s2 = infered_fun_type.mgu_specified(&t)?.compose(&subst);
                         context.apply(&s2);
 
-                        let generalized = context.functions.generalize(&t.apply(&s2));
+                        let generalized = context.generalize(&t.apply(&s2));
                         context.functions.insert(name, generalized);
 
                         self.fun_decls[*fun_index].fun_type = Some(t.apply(&s2));
@@ -926,9 +938,7 @@ impl TypeInference for Program {
                     None => {
                         context.apply(&subst);
 
-                        let generalized = context
-                            .functions
-                            .generalize(&infered_fun_type.apply(&subst));
+                        let generalized = context.generalize(&infered_fun_type.apply(&subst));
                         context.functions.insert(name, generalized);
 
                         self.fun_decls[*fun_index].fun_type = Some(infered_fun_type.apply(&subst));
