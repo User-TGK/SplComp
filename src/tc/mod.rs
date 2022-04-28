@@ -145,8 +145,8 @@ impl TypeVar {
 
         if ty.ftv().contains(self) {
             return Err(format!(
-                "Occur check cannot construct infinite type: {}",
-                self
+                "Occur check cannot construct infinite type: {:?} {}",
+                ty, self
             ));
         }
 
@@ -491,7 +491,38 @@ impl TypeInference for Statement {
                 Ok(s3)
             }
             Statement::Assign(a) => match context.get_var(&a.target.name) {
-                Some(ts) => a.value.infer(context, &ts.ty, generator),
+                Some(ts) => {
+                    if !a.target.fields.is_empty() {
+                        let fresh = generator.new_var();
+
+                        let mut call_expr = Expr::Atom(Atom::Variable(Variable::new(
+                            a.target.name.clone(),
+                            vec![],
+                        )));
+
+                        for f in &a.target.fields {
+                            let builtin_identifier = f.builtin_identifier();
+                            call_expr = Expr::Atom(Atom::FunCall(FunCall::new(
+                                builtin_identifier,
+                                vec![call_expr],
+                            )));
+                        }
+
+                        let s = call_expr.infer(context, &fresh.clone().into(), generator)?;
+
+                        let fresh2 = generator.new_var();
+
+                        let s2 = a
+                            .value
+                            .infer(context, &Into::<Type>::into(fresh.clone()).apply(&s), generator)?
+                            .compose(&s);
+
+                        Ok(Into::<Type>::into(fresh).apply(&s2).mgu(&Into::<Type>::into(fresh2).apply(&s))?.compose(&s2))
+
+                    } else {
+                        a.value.infer(context, &ts.ty, generator)
+                    }
+                }
                 None => Err(format!("Unknown identifier '{}'", a.target.name)),
             },
 
@@ -587,10 +618,11 @@ impl TypeInference for FunDecl {
                 .infer(&context, &fresh.clone().into(), generator)?
                 .compose(&subst);
 
-                context = context.apply(&subst);
-                context
-                    .local_vars
-                    .insert(v.name.clone(), subst[&fresh].clone().into());
+            context
+                .local_vars
+                .insert(v.name.clone(), Into::<Type>::into(fresh.clone()).into());
+
+            context = context.apply(&subst);
         }
 
         for s in &mut self.statements {

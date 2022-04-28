@@ -6,7 +6,7 @@ use crate::token::*;
 
 fn typing_error_test_helper(input: &str, err: &str) {
     let tokens: Vec<Token> = Scanner::new(input).collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let (rest, mut program) = program_parser(tokens).unwrap();
     assert!(rest.is_empty());
@@ -16,7 +16,7 @@ fn typing_error_test_helper(input: &str, err: &str) {
 
 fn typing_success_test_helper(input: &str, expected_output: &str) {
     let tokens: Vec<Token> = Scanner::new(input).collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let (rest, mut program) = program_parser(tokens).unwrap();
     assert!(rest.is_empty());
@@ -24,7 +24,7 @@ fn typing_success_test_helper(input: &str, expected_output: &str) {
     assert_eq!(Ok(()), run(&mut program));
 
     let ttokens: Vec<Token> = Scanner::new(expected_output).collect();
-    let ttokens = Tokens::new(&ttokens);
+    let ttokens = Tokens::new(&ttokens, "");
 
     let (trest, typed_program) = program_parser(ttokens).unwrap();
     assert!(trest.is_empty());

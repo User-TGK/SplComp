@@ -348,13 +348,13 @@ mod test {
         let input = fs::read_to_string(filename).unwrap();
         let scanner = Scanner::new(&input);
         let tokens: Vec<Token> = scanner.collect();
-        let tokens = Tokens::new(&tokens);
+        let tokens = Tokens::new(&tokens, "");
 
         let (_, ast1) = program_parser(tokens).unwrap();
         let output = to_string(&ast1.to_pretty(), Some(40), 4);
         let scanner = Scanner::new(&output);
         let tokens: Vec<Token> = scanner.collect();
-        let tokens = Tokens::new(&tokens);
+        let tokens = Tokens::new(&tokens, "");
 
         let (_, ast2) = program_parser(tokens).unwrap();
 

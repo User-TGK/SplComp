@@ -19,7 +19,7 @@ fn test_{name}() {{
 {content}
 "#;
     let tokens: Vec<Token> = Scanner::new(CODE).collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, CODE);
 
     let (rest, _program) = program_parser(tokens).unwrap();
 

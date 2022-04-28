@@ -6,7 +6,7 @@ use num_bigint::BigUint;
 
 use std::fmt;
 use std::iter::Enumerate;
-use std::ops::{Deref, Range, RangeFrom, RangeFull, RangeTo};
+use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Tokens<'a> {
