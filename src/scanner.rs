@@ -10,6 +10,8 @@ pub struct Scanner<'a> {
     line: usize,
     /// The current column used for processing.
     column: usize,
+    /// The current token index used for processing.
+    index: usize,
     /// Contains the regular expression by which tokens are recognized from the input.
     regex: Regex,
 }
@@ -26,13 +28,20 @@ impl<'a> Scanner<'a> {
             text,
             line: 0,
             column: 0,
+            index: 0,
             regex: Regex::new(&regex).unwrap(),
         }
     }
 
     /// Constructs a new error token from an error kind.
-    pub fn error_token(&self, kind: ErrorKind) -> Token<'a> {
-        Token::new(TokenKind::Error(kind), self.line, self.column)
+    pub fn error_token(&self, kind: ErrorKind, size: usize) -> Token<'a> {
+        Token::new(
+            TokenKind::Error(kind),
+            self.line,
+            self.column,
+            self.index,
+            size,
+        )
     }
 
     fn newline_occurences(&self, index: usize) -> Vec<usize> {
@@ -76,6 +85,7 @@ impl<'a> Iterator for Scanner<'a> {
                 } else {
                     self.column += c.len_utf8();
                 }
+                self.index += c.len_utf8();
                 self.text = &self.text[c.len_utf8()..];
             } else if self.text.starts_with("//") {
                 // Skip single line comments
@@ -83,6 +93,7 @@ impl<'a> Iterator for Scanner<'a> {
                 let line_index = self.text.find('\n')?;
                 self.line += 1;
                 self.column = 0;
+                self.index += line_index + 1;
                 self.text = &self.text[line_index + 1..];
             } else if self.text.starts_with("/*") {
                 match self.text.find("*/") {
@@ -97,6 +108,7 @@ impl<'a> Iterator for Scanner<'a> {
                                 self.column += c.len_utf8();
                             }
                         }
+                        self.index += close_index + 2;
                         self.text = &self.text[close_index + 2..];
                     }
                     None => {
@@ -106,6 +118,8 @@ impl<'a> Iterator for Scanner<'a> {
                             kind: TokenKind::Error(ErrorKind::UnclosedMultiLineComment),
                             line: self.line,
                             column: self.column,
+                            index: self.index,
+                            size: self.text.len(),
                         };
 
                         // Skip the rest of the text
@@ -133,16 +147,20 @@ impl<'a> Iterator for Scanner<'a> {
                 if let Some(m) = captures.name(token_kind.name()) {
                     if m.start() != 0 {
                         let illegal_token = self.text[0..m.start()].to_string();
-                        let e = Some(self.error_token(ErrorKind::IllegalToken(illegal_token)));
+                        let e = Some(
+                            self.error_token(ErrorKind::IllegalToken(illegal_token), m.start()),
+                        );
 
                         self.update_line_column_for_new_index(m.start());
 
+                        self.index += m.start();
                         self.text = &self.text[m.start()..];
 
                         return e;
                     }
 
-                    let mut token = Token::new(token_kind, self.line, self.column);
+                    let mut token =
+                        Token::new(token_kind, self.line, self.column, self.index, m.end());
 
                     match token.kind {
                         TokenKind::Integer(_) => {
@@ -151,7 +169,7 @@ impl<'a> Iterator for Scanner<'a> {
                         TokenKind::Bool(_) => token.kind = TokenKind::Bool(m.as_str() == "True"),
                         TokenKind::Char(_) => {
                             let matched = m.as_str();
-                            let chars = &matched[1..matched.len()-1];
+                            let chars = &matched[1..matched.len() - 1];
                             let c = match chars {
                                 "\\'" => '\'',
                                 "\\\\" => '\\',
@@ -159,10 +177,14 @@ impl<'a> Iterator for Scanner<'a> {
                                 "\\r" => '\r',
                                 "\\t" => '\t',
                                 _ if chars.starts_with('\\') => {
-                                    let e = Some(self.error_token(ErrorKind::IllegalEscape(chars.to_string())));
+                                    let e = Some(self.error_token(
+                                        ErrorKind::IllegalEscape(chars.to_string()),
+                                        m.end(),
+                                    ));
 
                                     self.update_line_column_for_new_index(m.end());
 
+                                    self.index += m.end();
                                     self.text = &self.text[m.end()..];
 
                                     return e;
@@ -191,6 +213,7 @@ impl<'a> Iterator for Scanner<'a> {
 
                     self.update_line_column_for_new_index(m.end());
 
+                    self.index += m.end();
                     self.text = &self.text[m.end()..];
 
                     return Some(token);
@@ -368,7 +391,10 @@ mod test {
         single_token_test_helper("'\\n'", TokenKind::Char('\n'));
         single_token_test_helper("'\\r'", TokenKind::Char('\r'));
         single_token_test_helper("'\\t'", TokenKind::Char('\t'));
-        single_token_test_helper("'\\x'", TokenKind::Error(ErrorKind::IllegalEscape("\\x".to_string())));
+        single_token_test_helper(
+            "'\\x'",
+            TokenKind::Error(ErrorKind::IllegalEscape("\\x".to_string())),
+        );
     }
 
     #[test]
@@ -378,15 +404,9 @@ mod test {
             TokenKind::String("Hello world".to_string()),
         );
 
-        single_token_test_helper(
-            r#""\"""#,
-            TokenKind::String(r#"""#.to_string()),
-        );
+        single_token_test_helper(r#""\"""#, TokenKind::String(r#"""#.to_string()));
 
-        single_token_test_helper(
-            r#""\\""#,
-            TokenKind::String(r#"\"#.to_string()),
-        );
+        single_token_test_helper(r#""\\""#, TokenKind::String(r#"\"#.to_string()));
 
         single_token_test_helper(r#""\n""#, TokenKind::String("\n".to_string()));
 

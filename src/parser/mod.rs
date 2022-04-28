@@ -1,22 +1,79 @@
+mod error;
 #[cfg(test)]
 mod test;
 
 use crate::ast::*;
 use crate::token::*;
 
+use error::Error;
+
 use nom::branch::alt;
 use nom::bytes::complete::take;
 use nom::combinator::{map, opt, verify};
-use nom::error::{Error, ErrorKind};
+use nom::error::{context, ContextError, ErrorKind, ParseError};
 use nom::multi::{fold_many0, many0, many1, many_till, separated_list0};
 use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
+use nom::Parser;
 use nom::{Err, IResult};
+
+pub fn expected_token<'a, F: 'a, O>(
+    expected: TokenKind<'a>,
+    mut f: F,
+) -> impl 'a + FnMut(Tokens<'a>) -> IResult<Tokens<'a>, O, Error<'a>>
+where
+    F: Parser<Tokens<'a>, O, Error<'a>>,
+{
+    move |i| match f.parse(i.clone()) {
+        Ok(o) => Ok(o),
+        Err(Err::Incomplete(i)) => Err(Err::Incomplete(i)),
+        Err(Err::Error(e)) => Err(Err::Error(Error::add_expected(i, expected.clone(), e))),
+        Err(Err::Failure(e)) => Err(Err::Failure(Error::add_expected(i, expected.clone(), e))),
+    }
+}
+
+pub fn expected_context<'a, F: 'a, O>(
+    expected: &'static str,
+    mut f: F,
+) -> impl 'a + FnMut(Tokens<'a>) -> IResult<Tokens<'a>, O, Error<'a>>
+where
+    F: Parser<Tokens<'a>, O, Error<'a>>,
+{
+    move |i| match f.parse(i.clone()) {
+        Ok(o) => Ok(o),
+        Err(Err::Incomplete(i)) => Err(Err::Incomplete(i)),
+        Err(Err::Error(e)) => Err(Err::Error(Error::add_expected_context(
+            i,
+            expected.clone(),
+            e,
+        ))),
+        Err(Err::Failure(e)) => Err(Err::Failure(Error::add_expected_context(
+            i,
+            expected.clone(),
+            e,
+        ))),
+    }
+}
+
+fn require<'a, P, I, O, E>(mut p: P) -> impl FnMut(I) -> IResult<I, O, E>
+where
+    E: ParseError<I>,
+    P: Parser<I, O, E>,
+{
+    move |tokens: I| match p.parse(tokens) {
+        Ok(res) => Ok(res),
+        Err(Err::Error(e)) => Err(Err::Failure(e)),
+        Err(err) => Err(err),
+    }
+}
 
 macro_rules! token_parser (
     ($name:ident, $kind:expr) => (
-        fn $name(tokens: Tokens) -> IResult<Tokens, Tokens> {
-            verify(take(1usize), |t: &Tokens| {
-                t[0].kind == $kind}
+        fn $name(tokens: Tokens) -> IResult<Tokens, Tokens, Error> {
+            expected_token(
+                $kind,
+                verify(take(1usize), |t: &Tokens| {
+                    t[0].kind == $kind
+                })
             )(tokens)
         }
     )
@@ -85,7 +142,7 @@ token_parser!(tl_parser, TokenKind::Tl);
 token_parser!(fst_parser, TokenKind::Fst);
 token_parser!(snd_parser, TokenKind::Snd);
 
-pub fn program_parser(tokens: Tokens) -> IResult<Tokens, Program> {
+pub fn program_parser(tokens: Tokens) -> IResult<Tokens, Program, Error> {
     map(
         many1(alt((
             map(var_decl_parser, Decl::VarDecl),
@@ -111,7 +168,7 @@ pub fn program_parser(tokens: Tokens) -> IResult<Tokens, Program> {
 }
 
 /// Parses a tuple type, ie. "(" type "," type ")".
-fn tuple_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
+fn tuple_type_parser(tokens: Tokens) -> IResult<Tokens, Type, Error> {
     map(
         delimited(
             opening_paren_parser,
@@ -122,20 +179,23 @@ fn tuple_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
     )(tokens)
 }
 
-fn function_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
+fn function_type_parser(tokens: Tokens) -> IResult<Tokens, Type, Error> {
     map(
         tuple((
             double_colon_parser,
             many0(type_parser),
-            right_arrow_parser,
-            alt((type_parser, map(void_type_parser, |_| Type::Void))),
+            require(right_arrow_parser),
+            require(expected_context(
+                "function return type",
+                alt((type_parser, map(void_type_parser, |_| Type::Void))),
+            )),
         )),
         |(_, param_types, _, return_type)| Type::Function(param_types, Box::new(return_type)),
     )(tokens)
 }
 
 /// Parses an array type, ie. "[" type "]".
-fn array_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
+fn array_type_parser(tokens: Tokens) -> IResult<Tokens, Type, Error> {
     map(
         delimited(opening_square_parser, type_parser, closing_square_parser),
         |t| Type::List(Box::new(t)),
@@ -143,7 +203,7 @@ fn array_type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
 }
 
 /// Parses a type.
-fn type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
+fn type_parser(tokens: Tokens) -> IResult<Tokens, Type, Error> {
     alt((
         map(int_type_parser, |_| Type::Int),
         map(bool_type_parser, |_| Type::Bool),
@@ -156,158 +216,185 @@ fn type_parser(tokens: Tokens) -> IResult<Tokens, Type> {
 }
 
 /// Parses the type of a variable declaration, either "var" or a type.
-fn var_decl_type_parser(tokens: Tokens) -> IResult<Tokens, Option<Type>> {
+fn var_decl_type_parser(tokens: Tokens) -> IResult<Tokens, Option<Type>, Error> {
     alt((map(var_parser, |_| None), map(type_parser, Some)))(tokens)
 }
 
 /// Parses a variable declaration.
-fn var_decl_parser(tokens: Tokens) -> IResult<Tokens, VarDecl> {
-    map(
-        tuple((
-            var_decl_type_parser,
-            identifier_parser,
-            assignment_parser,
-            expr_parser,
-            semicolon_parser,
-        )),
-        |(var_type, name, _, value, _)| VarDecl {
-            var_type,
-            name,
-            value,
-        },
+fn var_decl_parser(tokens: Tokens) -> IResult<Tokens, VarDecl, Error> {
+    context(
+        "var declaration",
+        map(
+            tuple((
+                var_decl_type_parser,
+                identifier_parser,
+                assignment_parser,
+                expr_parser,
+                require(semicolon_parser),
+            )),
+            |(var_type, name, _, value, _)| VarDecl {
+                var_type,
+                name,
+                value,
+            },
+        ),
     )(tokens)
 }
 
 /// Parses a function declaration.
-fn fun_decl_parser(tokens: Tokens) -> IResult<Tokens, FunDecl> {
-    map(
-        tuple((
-            identifier_parser,
-            delimited(
-                opening_paren_parser,
-                separated_list0(comma_parser, identifier_parser),
-                closing_paren_parser,
-            ),
-            opt(type_parser),
+fn fun_decl_parser(tokens: Tokens) -> IResult<Tokens, FunDecl, Error> {
+    context(
+        "function declaration",
+        map(
             tuple((
-                opening_brace_parser,
-                many0(var_decl_parser),
-                many1(statement_parser),
-                closing_brace_parser,
-            )),
-        )),
-        |(name, params, fun_type, (_, var_decls, statements, _))| FunDecl {
-            name,
-            params,
-            fun_type,
-            var_decls,
-            statements,
-        },
-    )(tokens)
-}
-
-fn if_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
-    map(
-        tuple((
-            if_parser,
-            delimited(opening_paren_parser, expr_parser, closing_paren_parser),
-            delimited(
-                opening_brace_parser,
-                many0(statement_parser),
-                closing_brace_parser,
-            ),
-            opt(preceded(
-                else_parser,
+                identifier_parser,
                 delimited(
-                    opening_brace_parser,
-                    many0(statement_parser),
-                    closing_brace_parser,
+                    opening_paren_parser,
+                    separated_list0(comma_parser, identifier_parser),
+                    closing_paren_parser,
                 ),
+                opt(type_parser),
+                tuple((
+                    opening_brace_parser,
+                    many0(var_decl_parser),
+                    expected_context("statement in function body", many1(statement_parser)),
+                    require(closing_brace_parser),
+                )),
             )),
-        )),
-        |(_, cond, if_true, if_false)| {
-            Statement::If(If {
-                cond,
-                if_true,
-                if_false: if_false.unwrap_or_else(Vec::new),
-            })
-        },
+            |(name, params, fun_type, (_, var_decls, statements, _))| FunDecl {
+                name,
+                params,
+                fun_type,
+                var_decls,
+                statements,
+            },
+        ),
     )(tokens)
 }
 
-fn while_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
-    map(
-        preceded(
-            while_parser,
-            pair(
+fn if_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, Error> {
+    context(
+        "if statement",
+        map(
+            tuple((
+                if_parser,
                 delimited(opening_paren_parser, expr_parser, closing_paren_parser),
                 delimited(
                     opening_brace_parser,
                     many0(statement_parser),
                     closing_brace_parser,
                 ),
-            ),
+                opt(preceded(
+                    else_parser,
+                    delimited(
+                        opening_brace_parser,
+                        many0(statement_parser),
+                        closing_brace_parser,
+                    ),
+                )),
+            )),
+            |(_, cond, if_true, if_false)| {
+                Statement::If(If {
+                    cond,
+                    if_true,
+                    if_false: if_false.unwrap_or_else(Vec::new),
+                })
+            },
         ),
-        |(cond, body)| Statement::While(While { cond, body }),
     )(tokens)
 }
 
-fn assign_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
-    map(
-        tuple((
-            pair(identifier_parser, field_parser),
-            assignment_parser,
-            expr_parser,
-            semicolon_parser,
+fn while_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, Error> {
+    context(
+        "while statement",
+        map(
+            preceded(
+                while_parser,
+                pair(
+                    delimited(opening_paren_parser, expr_parser, closing_paren_parser),
+                    delimited(
+                        opening_brace_parser,
+                        many0(statement_parser),
+                        closing_brace_parser,
+                    ),
+                ),
+            ),
+            |(cond, body)| Statement::While(While { cond, body }),
+        ),
+    )(tokens)
+}
+
+fn assign_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, Error> {
+    context(
+        "assignment",
+        map(
+            tuple((
+                pair(identifier_parser, field_parser),
+                assignment_parser,
+                expr_parser,
+                semicolon_parser,
+            )),
+            |((id, fields), _, value, _)| {
+                Statement::Assign(Assign {
+                    target: Variable::new(id, fields),
+                    value,
+                })
+            },
+        ),
+    )(tokens)
+}
+
+fn fun_call_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, Error> {
+    context(
+        "function call",
+        map(
+            terminated(fun_call_parser, semicolon_parser),
+            Statement::FunCall,
+        ),
+    )(tokens)
+}
+
+fn return_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, Error> {
+    context(
+        "return statement",
+        map(
+            delimited(return_parser, opt(expr_parser), semicolon_parser),
+            Statement::Return,
+        ),
+    )(tokens)
+}
+
+fn statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, Error> {
+    context(
+        "statement",
+        alt((
+            if_statement_parser,
+            while_statement_parser,
+            assign_statement_parser,
+            return_statement_parser,
+            fun_call_statement_parser,
         )),
-        |((id, fields), _, value, _)| {
-            Statement::Assign(Assign {
-                target: Variable::new(id, fields),
-                value,
-            })
-        },
     )(tokens)
 }
 
-fn fun_call_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
-    map(
-        terminated(fun_call_parser, semicolon_parser),
-        Statement::FunCall,
-    )(tokens)
-}
-
-fn return_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
-    map(
-        delimited(return_parser, opt(expr_parser), semicolon_parser),
-        Statement::Return,
-    )(tokens)
-}
-
-fn statement_parser(tokens: Tokens) -> IResult<Tokens, Statement> {
-    alt((
-        if_statement_parser,
-        while_statement_parser,
-        assign_statement_parser,
-        return_statement_parser,
-        fun_call_statement_parser,
-    ))(tokens)
-}
-
-fn expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, Error> {
     disjun_expr_parser(tokens)
 }
 
-fn disjun_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn disjun_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, Error> {
     let (rest, start) = conjun_expr_parser(tokens)?;
 
-    fold_many0(
-        preceded(or_parser, conjun_expr_parser),
-        move || start.clone(),
-        |acc, rhs| Expr::Or(Box::new(acc), Box::new(rhs)),
+    context(
+        "expression",
+        fold_many0(
+            preceded(or_parser, conjun_expr_parser),
+            move || start.clone(),
+            |acc, rhs| Expr::Or(Box::new(acc), Box::new(rhs)),
+        ),
     )(rest)
 }
 
-fn conjun_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn conjun_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, Error> {
     let (rest, start) = compare_expr_parser(tokens)?;
 
     fold_many0(
@@ -317,7 +404,7 @@ fn conjun_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     )(rest)
 }
 
-fn compare_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn compare_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, Error> {
     let (rest, start) = concat_expr_parser(tokens)?;
 
     fold_many0(
@@ -349,7 +436,7 @@ fn compare_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     )(rest)
 }
 
-fn concat_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn concat_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, Error> {
     let (rest, last) = term_expr_parser(tokens)?;
     let (tail, pairs) = many0(tuple((cons_parser, term_expr_parser)))(rest)?;
 
@@ -369,7 +456,7 @@ fn concat_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     }
 }
 
-fn term_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn term_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, Error> {
     let (rest, start) = factor_expr_parser(tokens)?;
 
     fold_many0(
@@ -387,7 +474,7 @@ fn term_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     )(rest)
 }
 
-fn factor_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn factor_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, Error> {
     let (rest, start) = unary_expr_parser(tokens)?;
 
     fold_many0(
@@ -409,7 +496,7 @@ fn factor_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     )(rest)
 }
 
-fn unary_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn unary_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, Error> {
     map(
         many_till(alt((minus_parser, not_parser)), atom_expr_parser),
         |(unary_symbols, atom)| {
@@ -430,7 +517,7 @@ fn unary_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     )(tokens)
 }
 
-fn atom_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn atom_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, Error> {
     alt((
         // '(' Expr ')'
         // '(' Expr ',' Expr ')'
@@ -446,7 +533,7 @@ fn atom_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     ))(tokens)
 }
 
-fn tuple_parenthesized_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
+fn tuple_parenthesized_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, Error> {
     let (rest, expr) = preceded(opening_paren_parser, expr_parser)(tokens)?;
 
     let res = alt((
@@ -460,22 +547,26 @@ fn tuple_parenthesized_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr> {
     res
 }
 
-fn identifier_parser(tokens: Tokens) -> IResult<Tokens, Id> {
+fn identifier_parser(tokens: Tokens) -> IResult<Tokens, Id, Error> {
     let (tail, mat) = take(1usize)(tokens)?;
 
     match mat[0].kind {
         TokenKind::Identifier(i) => Ok((tail, Id(i.to_string()))),
-        _ => Err(Err::Error(Error::new(tokens, ErrorKind::Tag))),
+        _ => Err(Err::Error(Error::add_context(
+            tokens,
+            "identifier",
+            Error::from_error_kind(tokens, ErrorKind::Tag),
+        ))),
     }
 }
 
-fn variable_atom_parser(tokens: Tokens) -> IResult<Tokens, Atom> {
+fn variable_atom_parser(tokens: Tokens) -> IResult<Tokens, Atom, Error> {
     map(tuple((identifier_parser, field_parser)), |(id, fields)| {
         Atom::Variable(Variable::new(id, fields))
     })(tokens)
 }
 
-fn field_parser(tokens: Tokens) -> IResult<Tokens, Vec<Field>> {
+fn field_parser(tokens: Tokens) -> IResult<Tokens, Vec<Field>, Error> {
     fold_many0(
         alt((hd_parser, tl_parser, fst_parser, snd_parser)),
         Vec::new,
@@ -494,7 +585,7 @@ fn field_parser(tokens: Tokens) -> IResult<Tokens, Vec<Field>> {
     )(tokens)
 }
 
-fn literal_atom_parser(tokens: Tokens) -> IResult<Tokens, Atom> {
+fn literal_atom_parser(tokens: Tokens) -> IResult<Tokens, Atom, Error> {
     let (tail, mat) = take(1usize)(tokens)?;
 
     let atom = match mat[0].kind {
@@ -502,13 +593,19 @@ fn literal_atom_parser(tokens: Tokens) -> IResult<Tokens, Atom> {
         TokenKind::Char(c) => Atom::CharLiteral(c),
         TokenKind::Integer(ref i) => Atom::IntLiteral(i.clone()),
         TokenKind::String(ref string) => Atom::StringLiteral(string.clone()),
-        _ => return Err(Err::Error(Error::new(tokens, ErrorKind::Tag))),
+        _ => {
+            return Err(Err::Error(Error::add_context(
+                tokens,
+                "atom",
+                Error::from_error_kind(tokens, ErrorKind::Tag),
+            )))
+        }
     };
 
     Ok((tail, atom))
 }
 
-fn fun_call_parser(tokens: Tokens) -> IResult<Tokens, FunCall> {
+fn fun_call_parser(tokens: Tokens) -> IResult<Tokens, FunCall, Error> {
     map(
         tuple((
             identifier_parser,

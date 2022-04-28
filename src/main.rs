@@ -8,6 +8,8 @@ use pretty_trait::to_string;
 
 use simple_logger::SimpleLogger;
 
+use nom::{error::*, Finish};
+
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
@@ -26,9 +28,9 @@ pub fn main() -> Result<(), Box<dyn Error>> {
     let scanner = Scanner::new(&input);
     let tokens: Vec<Token> = scanner.collect();
 
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, &input);
 
-    match program_parser(tokens) {
+    match program_parser(tokens).finish() {
         Ok((r, mut program)) => {
             if !(r.is_empty()) {
                 println!("{:?}", r);
@@ -44,7 +46,7 @@ pub fn main() -> Result<(), Box<dyn Error>> {
             file.write_all(&to_string(&program.to_pretty(), max_line, tab_size).as_bytes())?;
         }
         Err(e) => {
-            println!("{:?}", e);
+            println!("Parser error: \n\n{}", e.convert(&tokens));
         }
     }
 
