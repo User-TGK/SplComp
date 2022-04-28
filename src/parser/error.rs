@@ -38,7 +38,6 @@ impl<'a> Error<'a> {
             .position(|b| b == '\n')
             .unwrap_or(raw.len());
 
-        println!("raw: {:?}", raw.len());
         &raw[token.index - line_begin..token.index + line_end]
     }
 

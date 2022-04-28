@@ -510,15 +510,16 @@ impl TypeInference for Statement {
 
                         let s = call_expr.infer(context, &fresh.clone().into(), generator)?;
 
-                        let fresh2 = generator.new_var();
-
                         let s2 = a
                             .value
-                            .infer(context, &Into::<Type>::into(fresh.clone()).apply(&s), generator)?
+                            .infer(
+                                &context.apply(&s),
+                                &Into::<Type>::into(fresh.clone()).apply(&s),
+                                generator,
+                            )?
                             .compose(&s);
 
-                        Ok(Into::<Type>::into(fresh).apply(&s2).mgu(&Into::<Type>::into(fresh2).apply(&s))?.compose(&s2))
-
+                        Ok(s2)
                     } else {
                         a.value.infer(context, &ts.ty, generator)
                     }
@@ -627,7 +628,7 @@ impl TypeInference for FunDecl {
 
         for s in &mut self.statements {
             subst = s
-                .infer(&context, &beta.apply(&subst), generator)?
+                .infer(&context.apply(&subst), &beta.apply(&subst), generator)?
                 .compose(&subst);
             context = context.apply(&subst);
         }
