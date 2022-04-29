@@ -54,7 +54,7 @@ impl Preprocess for Program {
                         None
                     }
                 }) {
-                    return Err(format!("Global variable {} recursively defined", name));
+                    return Err(format!("Global variable '{}' recursively defined", name));
                 } else {
                     // This should never be reached
                     unreachable!();

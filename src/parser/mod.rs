@@ -278,19 +278,23 @@ fn if_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, Error> {
         map(
             tuple((
                 if_parser,
-                delimited(opening_paren_parser, expr_parser, closing_paren_parser),
-                delimited(
+                require(delimited(
+                    opening_paren_parser,
+                    expr_parser,
+                    closing_paren_parser,
+                )),
+                require(delimited(
                     opening_brace_parser,
                     many0(statement_parser),
                     closing_brace_parser,
-                ),
+                )),
                 opt(preceded(
                     else_parser,
-                    delimited(
+                    require(delimited(
                         opening_brace_parser,
                         many0(statement_parser),
                         closing_brace_parser,
-                    ),
+                    )),
                 )),
             )),
             |(_, cond, if_true, if_false)| {
@@ -365,16 +369,13 @@ fn return_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, Error> 
 }
 
 fn statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, Error> {
-    context(
-        "statement",
-        alt((
-            if_statement_parser,
-            while_statement_parser,
-            assign_statement_parser,
-            return_statement_parser,
-            fun_call_statement_parser,
-        )),
-    )(tokens)
+    alt((
+        if_statement_parser,
+        while_statement_parser,
+        assign_statement_parser,
+        return_statement_parser,
+        fun_call_statement_parser,
+    ))(tokens)
 }
 
 fn expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, Error> {

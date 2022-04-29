@@ -8,7 +8,7 @@ use pretty_trait::to_string;
 
 use simple_logger::SimpleLogger;
 
-use nom::{Finish};
+use nom::Finish;
 
 use std::error::Error;
 use std::fs::File;
