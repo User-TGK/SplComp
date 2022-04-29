@@ -1,0 +1,165 @@
+\documentclass{report}
+
+\usepackage[a4paper]{geometry}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\lstdefinelanguage{SPL}{%
+	alsoletter={0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_+-*/\%=<>!\&|}
+	morekeywords={while,else,if,print,return,isEmpty,fst,snd,hd,tl,Int,Char,Bool,Void,True,False,var},%
+	sensitive=true,%
+	morecomment=[l]{//},%
+	morecomment=[n]{/*}{*/},%
+	literate=%
+		{->}{{$\rightarrow$}}2
+		{>=}{{$\geq\:$}}1
+		{<=}{{$\leq\:$}}1
+		{==}{{$\equiv$}}1
+}
+\lstset{%
+	upquote=true,
+	breakatwhitespace=false,
+	breaklines=true,
+	postbreak=\mbox{\textcolor{gray}{$\hookrightarrow$}\space},
+	keepspaces=true,
+	basicstyle=\tt\footnotesize,
+	commentstyle=\sl,
+	keywordstyle=\bf,
+	stringstyle=\tt,
+	showspaces=false,
+	showstringspaces=false,
+	showtabs=false,
+	tabsize=4,
+	basewidth=0.43em,
+	columns=[c]fixed,
+	texcl=true,
+	captionpos=b
+}
+
+\author{%
+	Sjaak~Smetsers\\
+	\small\texttt{s123456}\and
+	Mart~Lubbers\\
+	\small\texttt{s123456}
+}
+\date{\today}
+\title{My compiler}
+
+\begin{document}
+
+\maketitle%
+
+\tableofcontents%
+
+\chapter{Introduction}
+\begin{quote}
+	\it
+	This document is a mandatory skeleton for your report.
+	It gives by no means an exhaustive list of suggestions for content.
+	The report should be readable self-contained and readable without access to the source code.
+\end{quote}
+\begin{itemize}
+	\item Motivate your language choice
+	\item Introduce spl
+	\item Give some nice examples.
+	\item \ldots
+\end{itemize}
+
+\chapter{Lexing \& Parsing}
+\begin{itemize}
+	\item How did you design the Abstract Syntax Tree
+	\item How does the parser work?
+	\item How did you handle difficult things like fixity, associativity etc.
+	\item Is there error handling? Recovery?
+	\item Do you have a lexer and parser?
+	\item How do they communicate?
+	\item Problems?
+	\item\ldots
+\end{itemize}
+
+\chapter{Analyses \& Typing}
+\begin{itemize}
+	\item New Abstract Syntax Tree? Decorate existing Abstract Syntax Tree?
+	\item Error messages?
+	\item Polymorphism? Inference? Overloading?
+	\item Problems?
+	\item\ldots
+\end{itemize}
+
+\chapter{Code Generation}
+\begin{itemize}
+	\item Compilation scheme?
+	\item How is data represented? Lists tuples
+	\item Semantics style, call-by-reference, call-by-value?
+	\item How did you solve overloaded functions?
+	\item Polymorphism?
+	\item Printing?
+	\item Problems?
+	\item\ldots
+\end{itemize}
+
+\chapter{Extension}
+Describe your extension in detail
+
+\chapter{Conclusion}
+What does work, what does not etc.
+
+\section{Reflection}
+\begin{itemize}
+	\item What do you think of the project?
+	\item How did it work out?
+	\item How did you divide the work?
+	\item Pitfalls?
+	\item \ldots
+\end{itemize}
+
+\appendix
+\chapter{Grammar}
+Change the grammar to the one you actually used
+
+\begin{verbatim}
+SPL       = Decl+
+Decl      = VarDecl
+          | FunDecl
+VarDecl   = ('var' | Type) id  '=' Exp ';'
+FunDecl   = id '(' [ FArgs ] ')' [ '::' FunType ] '{' VarDecl* Stmt+ '}'
+RetType   = Type
+          | 'Void'
+FunType   = [ FTypes ] '->' RetType
+FTypes    = Type [ FTypes ]
+Type      = BasicType
+          | '(' Type ',' Type ')'
+          | '[' Type ']'
+          | id
+BasicType = 'Int'
+          | 'Bool'
+          | 'Char'
+FArgs     = [ FArgs ',' ] id
+Stmt      = 'if' '(' Exp ')' '{' Stmt* '}' [ 'else' '{' Stmt* '}' ]
+          | 'while' '(' Exp ')' '{' Stmt* '}'
+          | id Field '=' Exp ';'
+          | FunCall ';'
+          | 'return' [ Exp ] ';'
+Exp       = id Field
+          | Exp Op2 Exp
+          | Op1 Exp
+          | int
+          | char
+          | 'False' | 'True'
+          | '(' Exp ')'
+          | FunCall
+          | '[]'
+          | '(' Exp ',' Exp ')'
+Field     = [ Field ( '.' 'hd' | '.' 'tl' | '.' 'fst' | '.' 'snd' ) ]
+FunCall   = id '(' [ ActArgs ] ')'
+ActArgs   = Exp [ ',' ActArgs ]
+Op2       = '+'  | '-' | '*' | '/'  | '%'
+          | '==' | '<' | '>' | '<=' | '>=' | '!='
+          | '&&' | '||'
+          | ':'
+Op1       = '!'  | '-'
+int       = [ '-' ] digit+
+id        = alpha ( '_' | alphaNum)*
+\end{verbatim}
+
+\end{document}
