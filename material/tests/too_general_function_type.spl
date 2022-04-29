@@ -1,0 +1,6 @@
+// Standard unification on the specified and inferred type will simply overwrite 
+// :: a -> a with Int -> Int, while this should be a compilation error.
+
+foo(x) :: a -> a {
+    return x + 1;
+}

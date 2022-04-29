@@ -10,6 +10,8 @@ pub struct Scanner<'a> {
     line: usize,
     /// The current column used for processing.
     column: usize,
+    /// The current token index used for processing.
+    index: usize,
     /// Contains the regular expression by which tokens are recognized from the input.
     regex: Regex,
 }
@@ -26,13 +28,20 @@ impl<'a> Scanner<'a> {
             text,
             line: 0,
             column: 0,
+            index: 0,
             regex: Regex::new(&regex).unwrap(),
         }
     }
 
     /// Constructs a new error token from an error kind.
-    pub fn error_token(&self, kind: ErrorKind) -> Token<'a> {
-        Token::new(TokenKind::Error(kind), self.line, self.column)
+    pub fn error_token(&self, kind: ErrorKind, size: usize) -> Token<'a> {
+        Token::new(
+            TokenKind::Error(kind),
+            self.line,
+            self.column,
+            self.index,
+            size,
+        )
     }
 
     fn newline_occurences(&self, index: usize) -> Vec<usize> {
@@ -76,6 +85,7 @@ impl<'a> Iterator for Scanner<'a> {
                 } else {
                     self.column += c.len_utf8();
                 }
+                self.index += c.len_utf8();
                 self.text = &self.text[c.len_utf8()..];
             } else if self.text.starts_with("//") {
                 // Skip single line comments
@@ -83,6 +93,7 @@ impl<'a> Iterator for Scanner<'a> {
                 let line_index = self.text.find('\n')?;
                 self.line += 1;
                 self.column = 0;
+                self.index += line_index + 1;
                 self.text = &self.text[line_index + 1..];
             } else if self.text.starts_with("/*") {
                 match self.text.find("*/") {
@@ -97,6 +108,7 @@ impl<'a> Iterator for Scanner<'a> {
                                 self.column += c.len_utf8();
                             }
                         }
+                        self.index += close_index + 2;
                         self.text = &self.text[close_index + 2..];
                     }
                     None => {
@@ -106,6 +118,8 @@ impl<'a> Iterator for Scanner<'a> {
                             kind: TokenKind::Error(ErrorKind::UnclosedMultiLineComment),
                             line: self.line,
                             column: self.column,
+                            index: self.index,
+                            size: self.text.len(),
                         };
 
                         // Skip the rest of the text
@@ -133,16 +147,20 @@ impl<'a> Iterator for Scanner<'a> {
                 if let Some(m) = captures.name(token_kind.name()) {
                     if m.start() != 0 {
                         let illegal_token = self.text[0..m.start()].to_string();
-                        let e = Some(self.error_token(ErrorKind::IllegalToken(illegal_token)));
+                        let e = Some(
+                            self.error_token(ErrorKind::IllegalToken(illegal_token), m.start()),
+                        );
 
                         self.update_line_column_for_new_index(m.start());
 
+                        self.index += m.start();
                         self.text = &self.text[m.start()..];
 
                         return e;
                     }
 
-                    let mut token = Token::new(token_kind, self.line, self.column);
+                    let mut token =
+                        Token::new(token_kind, self.line, self.column, self.index, m.end());
 
                     match token.kind {
                         TokenKind::Integer(_) => {
@@ -151,7 +169,7 @@ impl<'a> Iterator for Scanner<'a> {
                         TokenKind::Bool(_) => token.kind = TokenKind::Bool(m.as_str() == "True"),
                         TokenKind::Char(_) => {
                             let matched = m.as_str();
-                            let chars = &matched[1..matched.len()-1];
+                            let chars = &matched[1..matched.len() - 1];
                             let c = match chars {
                                 "\\'" => '\'',
                                 "\\\\" => '\\',
@@ -159,10 +177,14 @@ impl<'a> Iterator for Scanner<'a> {
                                 "\\r" => '\r',
                                 "\\t" => '\t',
                                 _ if chars.starts_with('\\') => {
-                                    let e = Some(self.error_token(ErrorKind::IllegalEscape(chars.to_string())));
+                                    let e = Some(self.error_token(
+                                        ErrorKind::IllegalEscape(chars.to_string()),
+                                        m.end(),
+                                    ));
 
                                     self.update_line_column_for_new_index(m.end());
 
+                                    self.index += m.end();
                                     self.text = &self.text[m.end()..];
 
                                     return e;
@@ -191,6 +213,7 @@ impl<'a> Iterator for Scanner<'a> {
 
                     self.update_line_column_for_new_index(m.end());
 
+                    self.index += m.end();
                     self.text = &self.text[m.end()..];
 
                     return Some(token);
@@ -206,10 +229,13 @@ impl<'a> Iterator for Scanner<'a> {
 mod test {
     use super::*;
 
-    fn single_token_test_helper(text: &str, expected_token: TokenKind) {
+    fn single_token_test_helper(text: &str, expected_token: TokenKind, expected_size: usize) {
         let mut scanner = Scanner::new(text);
 
-        assert_eq!(scanner.next(), Some(Token::new(expected_token, 0, 0)));
+        assert_eq!(
+            scanner.next(),
+            Some(Token::new(expected_token, 0, 0, 0, expected_size))
+        );
         assert_eq!(scanner.next(), None);
     }
 
@@ -243,132 +269,139 @@ mod test {
                 kind: TokenKind::Error(ErrorKind::UnclosedMultiLineComment),
                 line: 0,
                 column: 0,
+                index: 0,
+                size: 35,
             })
         );
     }
 
     #[test]
     fn test_double_colon() {
-        single_token_test_helper("::", TokenKind::DoubleColon);
+        single_token_test_helper("::", TokenKind::DoubleColon, 2);
     }
 
     #[test]
     fn test_right_arrow() {
-        single_token_test_helper("->", TokenKind::RightArrow);
+        single_token_test_helper("->", TokenKind::RightArrow, 2);
     }
 
     #[test]
     fn test_plus() {
-        single_token_test_helper("+", TokenKind::Plus);
+        single_token_test_helper("+", TokenKind::Plus, 1);
     }
 
     #[test]
     fn test_minus() {
-        single_token_test_helper("-", TokenKind::Minus);
+        single_token_test_helper("-", TokenKind::Minus, 1);
     }
 
     #[test]
     fn test_divide() {
-        single_token_test_helper("/", TokenKind::Divide);
+        single_token_test_helper("/", TokenKind::Divide, 1);
     }
 
     #[test]
     fn test_times() {
-        single_token_test_helper("*", TokenKind::Times);
+        single_token_test_helper("*", TokenKind::Times, 1);
     }
 
     #[test]
     fn test_modulo() {
-        single_token_test_helper("%", TokenKind::Modulo);
+        single_token_test_helper("%", TokenKind::Modulo, 1);
     }
 
     #[test]
     fn test_equals() {
-        single_token_test_helper("==", TokenKind::Equals);
+        single_token_test_helper("==", TokenKind::Equals, 2);
     }
 
     #[test]
     fn test_lt() {
-        single_token_test_helper("<", TokenKind::Lt);
+        single_token_test_helper("<", TokenKind::Lt, 1);
     }
 
     #[test]
     fn test_gt() {
-        single_token_test_helper(">", TokenKind::Gt);
+        single_token_test_helper(">", TokenKind::Gt, 1);
     }
 
     #[test]
     fn test_le() {
-        single_token_test_helper("<=", TokenKind::Le);
+        single_token_test_helper("<=", TokenKind::Le, 2);
     }
 
     #[test]
     fn test_ge() {
-        single_token_test_helper(">=", TokenKind::Ge);
+        single_token_test_helper(">=", TokenKind::Ge, 2);
     }
 
     #[test]
     fn test_not_equals() {
-        single_token_test_helper("!=", TokenKind::NotEquals);
+        single_token_test_helper("!=", TokenKind::NotEquals, 2);
     }
 
     #[test]
     fn test_and() {
-        single_token_test_helper("&&", TokenKind::And);
+        single_token_test_helper("&&", TokenKind::And, 2);
     }
 
     #[test]
     fn test_or() {
-        single_token_test_helper("||", TokenKind::Or);
+        single_token_test_helper("||", TokenKind::Or, 2);
     }
 
     #[test]
     fn test_cons() {
-        single_token_test_helper(":", TokenKind::Cons);
+        single_token_test_helper(":", TokenKind::Cons, 1);
     }
 
     #[test]
     fn test_not() {
-        single_token_test_helper("!", TokenKind::Not);
+        single_token_test_helper("!", TokenKind::Not, 1);
     }
 
     #[test]
     fn test_assignment() {
-        single_token_test_helper("=", TokenKind::Assignment);
+        single_token_test_helper("=", TokenKind::Assignment, 1);
     }
 
     #[test]
     fn test_positive_integer() {
-        single_token_test_helper("562", TokenKind::Integer(562u32.into()));
+        single_token_test_helper("562", TokenKind::Integer(562u32.into()), 3);
 
         single_token_test_helper(
             "123456789123456789123456789123456789",
             TokenKind::Integer("123456789123456789123456789123456789".parse().unwrap()),
+            36,
         );
     }
 
     #[test]
     fn test_true_boolean() {
-        single_token_test_helper("True", TokenKind::Bool(true));
+        single_token_test_helper("True", TokenKind::Bool(true), 4);
     }
 
     #[test]
     fn test_false_boolean() {
-        single_token_test_helper("False", TokenKind::Bool(false));
+        single_token_test_helper("False", TokenKind::Bool(false), 5);
     }
 
     #[test]
     fn test_char() {
-        single_token_test_helper("'c'", TokenKind::Char('c'));
+        single_token_test_helper("'c'", TokenKind::Char('c'), 3);
 
-        single_token_test_helper("'+'", TokenKind::Char('+'));
+        single_token_test_helper("'+'", TokenKind::Char('+'), 3);
 
-        single_token_test_helper("'\\''", TokenKind::Char('\''));
-        single_token_test_helper("'\\\\'", TokenKind::Char('\\'));
-        single_token_test_helper("'\\n'", TokenKind::Char('\n'));
-        single_token_test_helper("'\\r'", TokenKind::Char('\r'));
-        single_token_test_helper("'\\t'", TokenKind::Char('\t'));
-        single_token_test_helper("'\\x'", TokenKind::Error(ErrorKind::IllegalEscape("\\x".to_string())));
+        single_token_test_helper("'\\''", TokenKind::Char('\''), 4);
+        single_token_test_helper("'\\\\'", TokenKind::Char('\\'), 4);
+        single_token_test_helper("'\\n'", TokenKind::Char('\n'), 4);
+        single_token_test_helper("'\\r'", TokenKind::Char('\r'), 4);
+        single_token_test_helper("'\\t'", TokenKind::Char('\t'), 4);
+        single_token_test_helper(
+            "'\\x'",
+            TokenKind::Error(ErrorKind::IllegalEscape("\\x".to_string())),
+            4,
+        );
     }
 
     #[test]
@@ -376,143 +409,138 @@ mod test {
         single_token_test_helper(
             r#""Hello world""#,
             TokenKind::String("Hello world".to_string()),
+            13,
         );
 
-        single_token_test_helper(
-            r#""\"""#,
-            TokenKind::String(r#"""#.to_string()),
-        );
+        single_token_test_helper(r#""\"""#, TokenKind::String(r#"""#.to_string()), 4);
 
-        single_token_test_helper(
-            r#""\\""#,
-            TokenKind::String(r#"\"#.to_string()),
-        );
+        single_token_test_helper(r#""\\""#, TokenKind::String(r#"\"#.to_string()), 4);
 
-        single_token_test_helper(r#""\n""#, TokenKind::String("\n".to_string()));
+        single_token_test_helper(r#""\n""#, TokenKind::String("\n".to_string()), 4);
 
-        single_token_test_helper(r#""\r""#, TokenKind::String("\r".to_string()));
+        single_token_test_helper(r#""\r""#, TokenKind::String("\r".to_string()), 4);
 
-        single_token_test_helper(r#""\t""#, TokenKind::String("\t".to_string()));
+        single_token_test_helper(r#""\t""#, TokenKind::String("\t".to_string()), 4);
 
         // TODO: illegal escapes
     }
 
     #[test]
     fn test_identifier() {
-        single_token_test_helper(&"func_name", TokenKind::Identifier("func_name"));
-        single_token_test_helper("ifibutnotif", TokenKind::Identifier("ifibutnotif"));
+        single_token_test_helper(&"func_name", TokenKind::Identifier("func_name"), 9);
+        single_token_test_helper("ifibutnotif", TokenKind::Identifier("ifibutnotif"), 11);
 
-        single_token_test_helper("if1", TokenKind::Identifier("if1"));
+        single_token_test_helper("if1", TokenKind::Identifier("if1"), 3);
     }
 
     #[test]
     fn test_var() {
-        single_token_test_helper("var", TokenKind::Var);
+        single_token_test_helper("var", TokenKind::Var, 3);
     }
 
     #[test]
     fn test_if() {
-        single_token_test_helper("if", TokenKind::If);
+        single_token_test_helper("if", TokenKind::If, 2);
     }
 
     #[test]
     fn test_else() {
-        single_token_test_helper("else", TokenKind::Else);
+        single_token_test_helper("else", TokenKind::Else, 4);
     }
 
     #[test]
     fn test_while() {
-        single_token_test_helper("while", TokenKind::While);
+        single_token_test_helper("while", TokenKind::While, 5);
     }
 
     #[test]
     fn test_return() {
-        single_token_test_helper("return", TokenKind::Return);
+        single_token_test_helper("return", TokenKind::Return, 6);
     }
 
     #[test]
     fn test_int_type() {
-        single_token_test_helper("Int", TokenKind::IntType);
+        single_token_test_helper("Int", TokenKind::IntType, 3);
     }
 
     #[test]
     fn test_bool_type() {
-        single_token_test_helper("Bool", TokenKind::BoolType);
+        single_token_test_helper("Bool", TokenKind::BoolType, 4);
     }
 
     #[test]
     fn test_char_type() {
-        single_token_test_helper("Char", TokenKind::CharType);
+        single_token_test_helper("Char", TokenKind::CharType, 4);
     }
 
     #[test]
     fn test_void_type() {
-        single_token_test_helper("Void", TokenKind::VoidType);
+        single_token_test_helper("Void", TokenKind::VoidType, 4);
     }
 
     #[test]
     fn test_hd() {
-        single_token_test_helper(".hd", TokenKind::Hd);
+        single_token_test_helper(".hd", TokenKind::Hd, 3);
     }
 
     #[test]
     fn test_tl() {
-        single_token_test_helper(".tl", TokenKind::Tl);
+        single_token_test_helper(".tl", TokenKind::Tl, 3);
     }
 
     #[test]
     fn test_fst() {
-        single_token_test_helper(".fst", TokenKind::Fst);
+        single_token_test_helper(".fst", TokenKind::Fst, 4);
     }
 
     #[test]
     fn test_snd() {
-        single_token_test_helper(".snd", TokenKind::Snd);
+        single_token_test_helper(".snd", TokenKind::Snd, 4);
     }
 
     #[test]
     fn test_empty_list() {
-        single_token_test_helper("[]", TokenKind::EmptyList);
+        single_token_test_helper("[]", TokenKind::EmptyList, 2);
     }
 
     #[test]
     fn test_semicolon() {
-        single_token_test_helper(";", TokenKind::Semicolon);
+        single_token_test_helper(";", TokenKind::Semicolon, 1);
     }
 
     #[test]
     fn test_comma() {
-        single_token_test_helper(",", TokenKind::Comma);
+        single_token_test_helper(",", TokenKind::Comma, 1);
     }
 
     #[test]
     fn test_opening_paren() {
-        single_token_test_helper("(", TokenKind::OpeningParen);
+        single_token_test_helper("(", TokenKind::OpeningParen, 1);
     }
 
     #[test]
     fn test_closing_paren() {
-        single_token_test_helper(")", TokenKind::ClosingParen);
+        single_token_test_helper(")", TokenKind::ClosingParen, 1);
     }
 
     #[test]
     fn test_opening_brace() {
-        single_token_test_helper("{", TokenKind::OpeningBrace);
+        single_token_test_helper("{", TokenKind::OpeningBrace, 1);
     }
 
     #[test]
     fn test_closing_brace() {
-        single_token_test_helper("}", TokenKind::ClosingBrace);
+        single_token_test_helper("}", TokenKind::ClosingBrace, 1);
     }
 
     #[test]
     fn test_opening_square() {
-        single_token_test_helper("[", TokenKind::OpeningSquare);
+        single_token_test_helper("[", TokenKind::OpeningSquare, 1);
     }
 
     #[test]
     fn test_closing_square() {
-        single_token_test_helper("]", TokenKind::ClosingSquare);
+        single_token_test_helper("]", TokenKind::ClosingSquare, 1);
     }
 
     #[test]
@@ -522,19 +550,28 @@ mod test {
 
         assert_eq!(
             scanner.next(),
-            Some(Token::new(TokenKind::Integer(1u32.into()), 0, 0))
+            Some(Token::new(TokenKind::Integer(1u32.into()), 0, 0, 0, 1))
         );
-        assert_eq!(scanner.next(), Some(Token::new(TokenKind::Minus, 0, 1)));
         assert_eq!(
             scanner.next(),
-            Some(Token::new(TokenKind::Integer(2u32.into()), 0, 2))
+            Some(Token::new(TokenKind::Minus, 0, 1, 1, 1))
         );
-        assert_eq!(scanner.next(), Some(Token::new(TokenKind::Minus, 0, 3)));
         assert_eq!(
             scanner.next(),
-            Some(Token::new(TokenKind::Integer(3u32.into()), 0, 4))
+            Some(Token::new(TokenKind::Integer(2u32.into()), 0, 2, 2, 1))
         );
-        assert_eq!(scanner.next(), Some(Token::new(TokenKind::Semicolon, 0, 5)));
+        assert_eq!(
+            scanner.next(),
+            Some(Token::new(TokenKind::Minus, 0, 3, 3, 1))
+        );
+        assert_eq!(
+            scanner.next(),
+            Some(Token::new(TokenKind::Integer(3u32.into()), 0, 4, 4, 1))
+        );
+        assert_eq!(
+            scanner.next(),
+            Some(Token::new(TokenKind::Semicolon, 0, 5, 5, 1))
+        );
     }
 
     #[test]
@@ -544,31 +581,34 @@ mod test {
 
         let mut scanner = Scanner::new(text);
 
-        assert_eq!(scanner.next(), Some(Token::new(TokenKind::While, 1, 28)));
         assert_eq!(
             scanner.next(),
-            Some(Token::new(TokenKind::OpeningParen, 1, 33))
+            Some(Token::new(TokenKind::While, 1, 28, 65, 5))
         );
         assert_eq!(
             scanner.next(),
-            Some(Token::new(TokenKind::Identifier("month"), 1, 34))
-        );
-        assert_eq!(scanner.next(), Some(Token::new(TokenKind::Lt, 1, 40)));
-        assert_eq!(
-            scanner.next(),
-            Some(Token::new(TokenKind::Integer(12u32.into()), 1, 42))
+            Some(Token::new(TokenKind::OpeningParen, 1, 33, 70, 1))
         );
         assert_eq!(
             scanner.next(),
-            Some(Token::new(TokenKind::ClosingParen, 1, 44))
+            Some(Token::new(TokenKind::Identifier("month"), 1, 34, 71, 5))
+        );
+        assert_eq!(scanner.next(), Some(Token::new(TokenKind::Lt, 1, 40, 77, 1)));
+        assert_eq!(
+            scanner.next(),
+            Some(Token::new(TokenKind::Integer(12u32.into()), 1, 42, 79, 2))
         );
         assert_eq!(
             scanner.next(),
-            Some(Token::new(TokenKind::OpeningBrace, 1, 46))
+            Some(Token::new(TokenKind::ClosingParen, 1, 44, 81, 1))
         );
         assert_eq!(
             scanner.next(),
-            Some(Token::new(TokenKind::ClosingBrace, 1, 47))
+            Some(Token::new(TokenKind::OpeningBrace, 1, 46, 83, 1))
+        );
+        assert_eq!(
+            scanner.next(),
+            Some(Token::new(TokenKind::ClosingBrace, 1, 47, 84, 1))
         );
     }
 

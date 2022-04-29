@@ -4,17 +4,19 @@ use nom::{InputIter, InputLength, InputTake, Needed, Slice};
 
 use num_bigint::BigUint;
 
+use std::fmt;
 use std::iter::Enumerate;
 use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Tokens<'a> {
     inner: &'a [Token<'a>],
+    pub raw: &'a str,
 }
 
 impl<'a> Tokens<'a> {
-    pub fn new(tokens: &'a [Token<'a>]) -> Self {
-        Self { inner: tokens }
+    pub fn new(tokens: &'a [Token<'a>], raw: &'a str) -> Self {
+        Self { inner: tokens, raw }
     }
 
     pub fn inner(&self) -> &'a [Token<'a>] {
@@ -26,6 +28,30 @@ impl<'a> Tokens<'a> {
     }
 }
 
+// impl<'a> Deref for Tokens<'a> {
+//     type Target = str;
+//     fn deref(&self) -> &'a str {
+//         if self.raw.len() > 1 && self.inner.len() > 1 {
+//             let hd = &self.inner[0];
+//             if self.raw.len() > hd.index {
+//                 if self.raw.len() > hd.index + hd.size - 1 {
+//                     &self.raw[hd.index..hd.index + hd.size - 1]
+//                 } else {
+//                     &self.raw[hd.index..]
+//                 }
+//             } else {
+//                 &self.raw
+//             }
+//         }
+//         //
+
+//         // println!("Deref, first token index: {:?}", hd.index);
+//         else {
+//             &self.raw
+//         }
+//     }
+// }
+
 impl<'a> InputLength for Tokens<'a> {
     fn input_len(&self) -> usize {
         self.inner.len()
@@ -35,15 +61,26 @@ impl<'a> InputLength for Tokens<'a> {
 impl<'a> InputTake for Tokens<'a> {
     fn take(&self, count: usize) -> Self {
         println!("Called take with count {}", count);
+
         Tokens {
             inner: &self.inner[0..count],
+            raw: &self.raw,
         }
     }
 
     fn take_split(&self, count: usize) -> (Self, Self) {
         let (p, s) = self.inner.split_at(count);
 
-        (Self { inner: s }, Self { inner: p })
+        (
+            Self {
+                inner: s,
+                raw: self.raw,
+            },
+            Self {
+                inner: p,
+                raw: self.raw,
+            },
+        )
     }
 }
 
@@ -51,6 +88,7 @@ impl<'a> Slice<Range<usize>> for Tokens<'a> {
     fn slice(&self, range: Range<usize>) -> Self {
         Tokens {
             inner: self.inner.slice(range),
+            raw: self.raw,
         }
     }
 }
@@ -69,7 +107,10 @@ impl<'a> Slice<RangeFrom<usize>> for Tokens<'a> {
 
 impl<'a> Slice<RangeFull> for Tokens<'a> {
     fn slice(&self, _: RangeFull) -> Self {
-        Tokens { inner: self.inner }
+        Tokens {
+            inner: self.inner,
+            raw: &self.raw,
+        }
     }
 }
 
@@ -118,11 +159,19 @@ pub struct Token<'a> {
     pub kind: TokenKind<'a>,
     pub line: usize,
     pub column: usize,
+    pub index: usize,
+    pub size: usize,
 }
 
 impl<'a> Token<'a> {
-    pub fn new(kind: TokenKind<'a>, line: usize, column: usize) -> Self {
-        Self { kind, line, column }
+    pub fn new(kind: TokenKind<'a>, line: usize, column: usize, index: usize, size: usize) -> Self {
+        Self {
+            kind,
+            line,
+            column,
+            index,
+            size,
+        }
     }
 
     pub fn lexical_analysis_order() -> impl Iterator<Item = TokenKind<'a>> {
@@ -405,5 +454,62 @@ impl<'a> TokenKind<'a> {
             Self::ClosingSquare => Some(r"\]"),
             Self::Error(_) => None,
         }
+    }
+}
+
+impl<'a> fmt::Display for TokenKind<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                TokenKind::Var => "var",
+                TokenKind::Assignment => "=",
+                TokenKind::Semicolon => ";",
+                TokenKind::OpeningBrace => "{",
+                TokenKind::ClosingBrace => "}",
+                TokenKind::DoubleColon => "::",
+                TokenKind::RightArrow => "->",
+                TokenKind::IntType => "Int",
+                TokenKind::BoolType => "Bool",
+                TokenKind::CharType => "Char",
+                TokenKind::VoidType => "Void",
+                TokenKind::OpeningSquare => "[",
+                TokenKind::ClosingSquare => "]",
+                TokenKind::If => "if",
+                TokenKind::Else => "else",
+                TokenKind::While => "while",
+                TokenKind::Return => "return",
+                TokenKind::Or => "||",
+                TokenKind::And => "&&",
+                TokenKind::Equals => "==",
+                TokenKind::NotEquals => "!=",
+                TokenKind::Lt => "<",
+                TokenKind::Le => "<=",
+                TokenKind::Gt => ">",
+                TokenKind::Ge => ">=",
+                TokenKind::Cons => ":",
+                TokenKind::Plus => "+",
+                TokenKind::Minus => "-",
+                TokenKind::Times => "*",
+                TokenKind::Divide => "/",
+                TokenKind::Modulo => "%",
+                TokenKind::Not => "!",
+                TokenKind::OpeningParen => "(",
+                TokenKind::ClosingParen => ")",
+                TokenKind::EmptyList => "[]",
+                TokenKind::Comma => ",",
+                TokenKind::Hd => ".hd",
+                TokenKind::Tl => ".tl",
+                TokenKind::Fst => ".fst",
+                TokenKind::Snd => ".snd",
+                TokenKind::Integer(_) => "int literal",
+                TokenKind::Bool(_) => "bool literal",
+                TokenKind::Char(_) => "char literal",
+                TokenKind::String(_) => "string literal",
+                TokenKind::Identifier(_) => "identifier",
+                TokenKind::Error(_e) => "error",
+            }
+        )
     }
 }

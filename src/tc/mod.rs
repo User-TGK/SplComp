@@ -28,6 +28,7 @@ impl Type {
             | (Type::Char, Type::Char)
             | (Type::Void, Type::Void) => Ok(Subst::default()),
             (Type::Var(tv1), Type::Var(tv2)) => tv2.bind(&Type::Var(tv1.clone())),
+            (Type::Var(tv), t2) => tv.bind(t2),
             (t1, Type::Var(_)) => Err(format!(
                 "Specified type is more general than actual type {:?}",
                 t1
@@ -64,7 +65,10 @@ impl Type {
 
             (Type::List(t1), Type::List(t2)) => t1.mgu_specified(t2),
 
-            (t1, t2) => Err(format!("Unification error: {:?} and {:?}", t1, t2)),
+            (t1, t2) => Err(format!(
+                "Unification error (inferred/specified): {:?} and {:?}",
+                t1, t2
+            )),
         }
     }
 
@@ -141,8 +145,8 @@ impl TypeVar {
 
         if ty.ftv().contains(self) {
             return Err(format!(
-                "Occur check cannot construct infinite type: {}",
-                self
+                "Occur check cannot construct infinite type: {:?} {}",
+                ty, self
             ));
         }
 
@@ -487,7 +491,39 @@ impl TypeInference for Statement {
                 Ok(s3)
             }
             Statement::Assign(a) => match context.get_var(&a.target.name) {
-                Some(ts) => a.value.infer(context, &ts.ty, generator),
+                Some(ts) => {
+                    if !a.target.fields.is_empty() {
+                        let fresh = generator.new_var();
+
+                        let mut call_expr = Expr::Atom(Atom::Variable(Variable::new(
+                            a.target.name.clone(),
+                            vec![],
+                        )));
+
+                        for f in &a.target.fields {
+                            let builtin_identifier = f.builtin_identifier();
+                            call_expr = Expr::Atom(Atom::FunCall(FunCall::new(
+                                builtin_identifier,
+                                vec![call_expr],
+                            )));
+                        }
+
+                        let s = call_expr.infer(context, &fresh.clone().into(), generator)?;
+
+                        let s2 = a
+                            .value
+                            .infer(
+                                &context.apply(&s),
+                                &Into::<Type>::into(fresh.clone()).apply(&s),
+                                generator,
+                            )?
+                            .compose(&s);
+
+                        Ok(s2)
+                    } else {
+                        a.value.infer(context, &ts.ty, generator)
+                    }
+                }
                 None => Err(format!("Unknown identifier '{}'", a.target.name)),
             },
 
@@ -517,9 +553,9 @@ impl TypeInference for FunCall {
                     let fresh = generator.new_var();
 
                     let s = a.infer(&context.apply(&sub), &fresh.clone().into(), generator)?;
-                    
+
                     if let Some(t) = s.get(&fresh) {
-                        arg_types.push(t.clone());
+                        arg_types.push(t.clone() /*.apply(&s)*/);
                     } else {
                         arg_types.push(fresh.clone().into());
                     }
@@ -583,15 +619,16 @@ impl TypeInference for FunDecl {
                 .infer(&context, &fresh.clone().into(), generator)?
                 .compose(&subst);
 
-            context = context.apply(&subst);
             context
                 .local_vars
-                .insert(v.name.clone(), subst[&fresh].clone().into());
+                .insert(v.name.clone(), Into::<Type>::into(fresh.clone()).into());
+
+            context = context.apply(&subst);
         }
 
         for s in &mut self.statements {
             subst = s
-                .infer(&context, &beta.apply(&subst), generator)?
+                .infer(&context.apply(&subst), &beta.apply(&subst), generator)?
                 .compose(&subst);
             context = context.apply(&subst);
         }
@@ -616,7 +653,12 @@ impl TypeInference for VarDecl {
         if let Type::Var(v) = expected {
             // Determine the variable type from the expression.
             let s = self.value.infer(context, expected, generator)?;
-            let infered_var_type = s[v].clone().apply(&s);
+
+            let infered_var_type = if let Some(t) = s.get(&v) {
+                t.clone().apply(&s)
+            } else {
+                Into::<Type>::into(v.clone()).apply(&s)
+            };
 
             match &self.var_type {
                 // We already had a type specified by the programmer.
@@ -780,7 +822,19 @@ impl TypeInference for Expr {
     }
 }
 
+impl Context {
+    /// Generalization for new function declarations.
+    fn generalize(&self, ty: &Type) -> TypeScheme {
+        TypeScheme::new(
+            ty.ftv().difference(&self.ftv()).cloned().collect(),
+            ty.clone(),
+        )
+    }
+}
+
 impl TypeEnv {
+    /// Generalization for builtin functions allowing us to only pass a
+    /// single environment of the context.
     fn generalize(&self, ty: &Type) -> TypeScheme {
         TypeScheme::new(
             ty.ftv().difference(&self.ftv()).cloned().collect(),
@@ -837,7 +891,7 @@ impl TypeInference for Program {
         }
 
         for component in &scc {
-            // let mut context_prime = context.clone();
+            let mut context_prime = context.clone();
             let mut fresh_sequence = vec![];
 
             let mut subst = Subst::default();
@@ -847,7 +901,7 @@ impl TypeInference for Program {
                 let fresh = generator.new_var();
                 fresh_sequence.push(fresh.clone());
 
-                context.functions.insert(
+                context_prime.functions.insert(
                     self.fun_decls[*i].name.clone(),
                     TypeScheme::new(vec![], fresh.into()),
                 );
@@ -857,7 +911,7 @@ impl TypeInference for Program {
                 let alpha: Type = fresh_sequence[var_index].clone().into();
 
                 let s = self.fun_decls[*fun_index].infer(
-                    &context.apply(&subst),
+                    &context_prime.apply(&subst),
                     &alpha.apply(&subst),
                     generator,
                 )?;
@@ -876,7 +930,7 @@ impl TypeInference for Program {
                         let s2 = infered_fun_type.mgu_specified(&t)?.compose(&subst);
                         context.apply(&s2);
 
-                        let generalized = context.functions.generalize(&t.apply(&s2));
+                        let generalized = context.generalize(&t.apply(&s2));
                         context.functions.insert(name, generalized);
 
                         self.fun_decls[*fun_index].fun_type = Some(t.apply(&s2));
@@ -884,9 +938,7 @@ impl TypeInference for Program {
                     None => {
                         context.apply(&subst);
 
-                        let generalized = context
-                            .functions
-                            .generalize(&infered_fun_type.apply(&subst));
+                        let generalized = context.generalize(&infered_fun_type.apply(&subst));
                         context.functions.insert(name, generalized);
 
                         self.fun_decls[*fun_index].fun_type = Some(infered_fun_type.apply(&subst));

@@ -1,0 +1,214 @@
+use crate::token::{Token, TokenKind, Tokens};
+
+use nom::error::{ContextError, ErrorKind, ParseError};
+
+use std::fmt::Write;
+
+#[derive(Debug, PartialEq)]
+pub struct Error<'a> {
+    pub errors: Vec<(Tokens<'a>, SPLParserErrorKind<'a>)>,
+}
+
+impl<'a> Error<'a> {
+    pub fn add_expected(input: Tokens<'a>, kind: TokenKind<'a>, mut other: Self) -> Self {
+        other
+            .errors
+            .push((input, SPLParserErrorKind::Expected(kind)));
+        other
+    }
+
+    pub fn add_expected_context(input: Tokens<'a>, e: &'static str, mut other: Self) -> Self {
+        other
+            .errors
+            .push((input, SPLParserErrorKind::ExpectedContext(e)));
+        other
+    }
+
+    /// Function that returns the entire string of the raw input on which a
+    /// token occured.
+    fn get_line(&self, token: &Token<'a>, raw: &'a str) -> &'a str {
+        let line_begin = raw[0..token.index]
+            .chars()
+            .rev()
+            .position(|b| b == '\n')
+            .unwrap_or(token.index);
+
+        let line_end = raw[token.index..]
+            .chars()
+            .position(|b| b == '\n')
+            .unwrap_or(raw.len());
+
+        &raw[token.index - line_begin..token.index + line_end]
+    }
+
+    pub fn convert(&self, input: &Tokens) -> String {
+        let mut result = std::string::String::new();
+
+        let mut scanner_errors = vec![];
+
+        for (tokens, kind) in &self.errors {
+            let raw = tokens.raw;
+
+            // Lexer error
+            if let Some((token, e)) = tokens.inner().iter().find_map(|t| {
+                if let TokenKind::Error(ref e) = t.kind {
+                    Some((t, e))
+                } else {
+                    None
+                }
+            }) {
+                if !scanner_errors.contains(&e) {
+                    scanner_errors.push(e);
+
+                    let line = self.get_line(&token, raw);
+
+                    match e {
+                        crate::error::ErrorKind::IllegalToken(t) => {
+                            let mut t = t.to_string();
+                            t.truncate(t.trim_end().len());
+
+                            write!(
+                                &mut result,
+                                "Illegal token at {line_number}:{column_number}:\n\
+                            {line}\n\
+                            {caret:>column$}\n\
+                            found: '{token}'\n\n",
+                                line_number = token.line + 1,
+                                column_number = token.column + 1,
+                                line = line,
+                                token = t
+                                    .strip_suffix("\r\n")
+                                    .or(t.strip_suffix('\n'))
+                                    .unwrap_or(&t),
+                                caret = '^',
+                                column = token.column + 1,
+                            )
+                            .unwrap();
+                        }
+                        crate::error::ErrorKind::UnclosedMultiLineComment => {
+                            write!(
+                                &mut result,
+                                "Unclosed multi-line comment starting at {line_number}:{column_number}:\n\
+                        {line}\n\
+                        {caret:>column$}\n\
+                        Missing closing token '*/' \n\n",
+                                line_number = token.line + 1,
+                                column_number = token.column + 1,
+                                line = line,
+                                caret = '^',
+                                column = token.column + 1,
+                            )
+                            .unwrap();
+                        }
+
+                        crate::error::ErrorKind::IllegalEscape(s) => {
+                            write!(
+                                &mut result,
+                                "Illegal escape sequence at {line_number}:{column_number}:\n\
+                        {line}\n\
+                        {caret:>column$}\n\
+                        Found unknown escaped character '{found}' \n\n",
+                                line_number = token.line + 1,
+                                column_number = token.column + 1,
+                                line = line,
+                                caret = '^',
+                                column = token.column + 1,
+                                found = s,
+                            )
+                            .unwrap();
+                        }
+
+                        crate::error::ErrorKind::Unknown => {}
+                    }
+                }
+
+                continue;
+            }
+
+            let hd = &tokens.inner().get(0).unwrap_or(input.inner().last().unwrap());
+            let line = self.get_line(hd, raw);
+
+            match kind {
+                SPLParserErrorKind::Context(s) => {
+                    write!(
+                        &mut result,
+                        "at {line_number}:{column_number}, in {context}:\n\
+                        {line}\n\
+                        {caret:>column$}\n\n",
+                        line_number = hd.line + 1,
+                        column_number = hd.column + 1,
+                        line = line,
+                        context = s,
+                        caret = '^',
+                        column = hd.column,
+                    )
+                    .unwrap();
+                }
+                SPLParserErrorKind::Expected(t) => {
+                    write!(
+                        &mut result,
+                        "at {line_number}:{column_number}:\n\
+                        {line}\n\
+                        {caret:>column$}\n\
+                        expected '{expected}'\n\n",
+                        line_number = hd.line + 1,
+                        column_number = hd.column + 1,
+                        line = line,
+                        caret = '^',
+                        column = hd.column,
+                        expected = t,
+                    )
+                    .unwrap();
+                }
+                SPLParserErrorKind::ExpectedContext(c) => {
+                    write!(
+                        &mut result,
+                        "at {line_number}:{column_number}:\n\
+                        {line}\n\
+                        {caret:>column$}\n\
+                        expected {context}\n\n",
+                        line_number = hd.line + 1,
+                        column_number = hd.column + 1,
+                        line = line,
+                        caret = '^',
+                        column = hd.column,
+                        context = &c,
+                    )
+                    .unwrap();
+                }
+
+                _ => {}
+            }
+        }
+
+        result
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum SPLParserErrorKind<'a> {
+    Context(&'static str),
+    Nom(ErrorKind),
+    Expected(TokenKind<'a>),
+    ExpectedContext(&'static str),
+}
+
+impl<'a> ParseError<Tokens<'a>> for Error<'a> {
+    fn from_error_kind(input: Tokens<'a>, kind: ErrorKind) -> Self {
+        Self {
+            errors: vec![(input, SPLParserErrorKind::Nom(kind))],
+        }
+    }
+
+    fn append(input: Tokens<'a>, kind: ErrorKind, mut other: Self) -> Self {
+        other.errors.push((input, SPLParserErrorKind::Nom(kind)));
+        other
+    }
+}
+
+impl<'a> ContextError<Tokens<'a>> for Error<'a> {
+    fn add_context(input: Tokens<'a>, ctx: &'static str, mut other: Self) -> Self {
+        other.errors.push((input, SPLParserErrorKind::Context(ctx)));
+        other
+    }
+}

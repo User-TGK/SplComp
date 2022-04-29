@@ -46,17 +46,24 @@ pub trait PrettyPrintable {
 
 impl PrettyPrintable for Program {
     fn to_pretty(&self) -> Box<dyn Pretty> {
-        Box::new(
-            delimited(
-                &"".join(Sep(1)).join(Sep(1)),
-                self.var_decls.iter().map(VarDecl::to_pretty),
-            )
-            .join(Newline)
-            .join(delimited(
+        if self.var_decls.is_empty() {
+            Box::new(delimited(
                 &"".join(Sep(1)).join(Sep(1)),
                 self.fun_decls.iter().map(FunDecl::to_pretty),
-            )),
-        )
+            ))
+        } else {
+            Box::new(
+                delimited(
+                    &"".join(Sep(1)).join(Sep(1)),
+                    self.var_decls.iter().map(VarDecl::to_pretty),
+                )
+                .join(Newline)
+                .join(delimited(
+                    &"".join(Sep(1)).join(Sep(1)),
+                    self.fun_decls.iter().map(FunDecl::to_pretty),
+                )),
+            )
+        }
     }
 }
 
@@ -341,13 +348,13 @@ mod test {
         let input = fs::read_to_string(filename).unwrap();
         let scanner = Scanner::new(&input);
         let tokens: Vec<Token> = scanner.collect();
-        let tokens = Tokens::new(&tokens);
+        let tokens = Tokens::new(&tokens, "");
 
         let (_, ast1) = program_parser(tokens).unwrap();
         let output = to_string(&ast1.to_pretty(), Some(40), 4);
         let scanner = Scanner::new(&output);
         let tokens: Vec<Token> = scanner.collect();
-        let tokens = Tokens::new(&tokens);
+        let tokens = Tokens::new(&tokens, "");
 
         let (_, ast2) = program_parser(tokens).unwrap();
 

@@ -9,11 +9,13 @@ macro_rules! boxed_int_literal (
 
 #[test]
 fn test_field_access() {
-    let tokens: Vec<Token> = Scanner::new(&"x.hd.tl.fst.snd").collect();
-    let tokens = Tokens::new(&tokens);
+    const CODE: &str = "x.hd.tl.fst.snd";
+
+    let tokens: Vec<Token> = Scanner::new(CODE).collect();
+    let tokens = Tokens::new(&tokens, CODE);
 
     let r1 = expr_parser(tokens);
-    let t1 = Tokens::new(&[]);
+    let t1 = Tokens::new(&[], CODE);
 
     let expected1 = Expr::Atom(Atom::Variable(Variable::new(
         Id(String::from("x")),
@@ -25,11 +27,13 @@ fn test_field_access() {
 
 #[test]
 fn test_tuple_expression() {
-    let tokens: Vec<Token> = Scanner::new(&"(2 * (1 + 6), 8)").collect();
-    let tokens = Tokens::new(&tokens);
+    const CODE: &str = "(2 * (1 + 6), 8)";
+
+    let tokens: Vec<Token> = Scanner::new(CODE).collect();
+    let tokens = Tokens::new(&tokens, CODE);
 
     let r1 = expr_parser(tokens);
-    let t1 = Tokens::new(&[]);
+    let t1 = Tokens::new(&[], CODE);
 
     let expected1 = Expr::Atom(Atom::Tuple(
         Box::new(Expr::Mul(
@@ -44,11 +48,13 @@ fn test_tuple_expression() {
 
 #[test]
 fn test_parenthesized_expr_precedence() {
-    let tokens: Vec<Token> = Scanner::new(&"(2 + 6) / 4").collect();
-    let tokens = Tokens::new(&tokens);
+    const CODE: &str = "(2 + 6) / 4";
+
+    let tokens: Vec<Token> = Scanner::new(CODE).collect();
+    let tokens = Tokens::new(&tokens, CODE);
 
     let r1 = expr_parser(tokens);
-    let t1 = Tokens::new(&[]);
+    let t1 = Tokens::new(&[], CODE);
 
     let expected1 = Expr::Div(
         Box::new(Expr::Add(boxed_int_literal!(2), boxed_int_literal!(6))),
@@ -60,11 +66,13 @@ fn test_parenthesized_expr_precedence() {
 
 #[test]
 fn test_disjun_expr_parser() {
-    let tokens: Vec<Token> = Scanner::new(&"1 <= 2 || 9 > 3 || 5 == 5").collect();
-    let tokens = Tokens::new(&tokens);
+    const CODE: &str = "1 <= 2 || 9 > 3 || 5 == 5";
+
+    let tokens: Vec<Token> = Scanner::new(CODE).collect();
+    let tokens = Tokens::new(&tokens, CODE);
 
     let r1 = disjun_expr_parser(tokens);
-    let t1 = Tokens::new(&[]);
+    let t1 = Tokens::new(&[], CODE);
 
     let expected1 = Expr::Or(
         Box::new(Expr::Or(
@@ -79,11 +87,13 @@ fn test_disjun_expr_parser() {
 
 #[test]
 fn test_conjun_expr_parser() {
-    let tokens: Vec<Token> = Scanner::new(&"1 <= 2 && 9 > 3 && 5 == 5").collect();
-    let tokens = Tokens::new(&tokens);
+    const CODE: &str = "1 <= 2 && 9 > 3 && 5 == 5";
+
+    let tokens: Vec<Token> = Scanner::new(CODE).collect();
+    let tokens = Tokens::new(&tokens, CODE);
 
     let r1 = conjun_expr_parser(tokens);
-    let t1 = Tokens::new(&[]);
+    let t1 = Tokens::new(&[], CODE);
 
     let expected1 = Expr::And(
         Box::new(Expr::And(
@@ -98,11 +108,13 @@ fn test_conjun_expr_parser() {
 
 #[test]
 fn test_compare_expr_parser() {
-    let tokens: Vec<Token> = Scanner::new(&"1 > 2 == 3+1 <= 4").collect();
-    let tokens = Tokens::new(&tokens);
+    const CODE: &str = "1 > 2 == 3+1 <= 4";
+
+    let tokens: Vec<Token> = Scanner::new(CODE).collect();
+    let tokens = Tokens::new(&tokens, CODE);
 
     let r1 = compare_expr_parser(tokens);
-    let t1 = Tokens::new(&[]);
+    let t1 = Tokens::new(&[], CODE);
 
     let expected1 = Expr::Le(
         Box::new(Expr::Equals(
@@ -117,11 +129,13 @@ fn test_compare_expr_parser() {
 
 #[test]
 fn test_concat_expr_parser() {
-    let tokens: Vec<Token> = Scanner::new(&"1:2:3").collect();
-    let tokens = Tokens::new(&tokens);
+    const CODE: &str = "1:2:3";
+
+    let tokens: Vec<Token> = Scanner::new(CODE).collect();
+    let tokens = Tokens::new(&tokens, CODE);
 
     let r1 = concat_expr_parser(tokens);
-    let t1 = Tokens::new(&[]);
+    let t1 = Tokens::new(&[], CODE);
     let expected1 = Expr::Cons(
         boxed_int_literal!(1),
         Box::new(Expr::Cons(boxed_int_literal!(2), boxed_int_literal!(3))),
@@ -132,11 +146,13 @@ fn test_concat_expr_parser() {
 
 #[test]
 fn test_term_expr_parser() {
-    let tokens: Vec<Token> = Scanner::new(&"24+6/3-8").collect();
-    let tokens = Tokens::new(&tokens);
+    const CODE: &str = r"24+6/3-8";
+
+    let tokens: Vec<Token> = Scanner::new(CODE).collect();
+    let tokens = Tokens::new(&tokens, CODE);
 
     let r1 = term_expr_parser(tokens);
-    let t1 = Tokens::new(&[]);
+    let t1 = Tokens::new(&[], CODE);
     let expected1 = Expr::Sub(
         Box::new(Expr::Add(
             boxed_int_literal!(24),
@@ -149,11 +165,13 @@ fn test_term_expr_parser() {
 
 #[test]
 fn test_factor_expr_parser() {
-    let tokens: Vec<Token> = Scanner::new(&"3*9%2/-26").collect();
-    let tokens = Tokens::new(&tokens);
+    const CODE: &str = "3*9%2/-26";
+
+    let tokens: Vec<Token> = Scanner::new(CODE).collect();
+    let tokens = Tokens::new(&tokens, CODE);
 
     let r1 = factor_expr_parser(tokens);
-    let t1 = Tokens::new(&[]);
+    let t1 = Tokens::new(&[], CODE);
     let expected1 = Expr::Div(
         Box::new(Expr::Mod(
             Box::new(Expr::Mul(boxed_int_literal!(3), boxed_int_literal!(9))),
@@ -172,7 +190,7 @@ fn test_program_parser() {
         var another_var = False;
         ";
     let tokens: Vec<Token> = Scanner::new(PROGRAM).collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, PROGRAM);
 
     let (rest, program) = program_parser(tokens).unwrap();
 
@@ -206,9 +224,10 @@ fn test_program_parser() {
 #[test]
 fn test_var_decl_parser() {
     // Inferred type
+    const ASSIGN_INFERRED: &str = r"var x = True;";
 
-    let tokens: Vec<Token> = Scanner::new("var x = True;").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens: Vec<Token> = Scanner::new(ASSIGN_INFERRED).collect();
+    let tokens = Tokens::new(&tokens, ASSIGN_INFERRED);
 
     let (rest, var_decl) = var_decl_parser(tokens).unwrap();
 
@@ -224,8 +243,10 @@ fn test_var_decl_parser() {
 
     // Explicit type
 
-    let tokens: Vec<Token> = Scanner::new("Int y = 42;").collect();
-    let tokens = Tokens::new(&tokens);
+    const ASSIGN_EXPLICIT: &str = r"Int y = 42;";
+
+    let tokens: Vec<Token> = Scanner::new(ASSIGN_EXPLICIT).collect();
+    let tokens = Tokens::new(&tokens, ASSIGN_EXPLICIT);
 
     let (rest, var_decl) = var_decl_parser(tokens).unwrap();
 
@@ -243,9 +264,10 @@ fn test_var_decl_parser() {
 #[test]
 fn test_if_statement_parser() {
     // No if_true, no if_false
+    const IF_TRUE: &str = r"if (True) {}";
 
-    let tokens: Vec<Token> = Scanner::new("if (True) {}").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens: Vec<Token> = Scanner::new(IF_TRUE).collect();
+    let tokens = Tokens::new(&tokens, IF_TRUE);
 
     let (rest, statement) = if_statement_parser(tokens).unwrap();
 
@@ -265,7 +287,7 @@ fn test_if_statement_parser() {
             if (False) {}
         }";
     let tokens: Vec<Token> = Scanner::new(ONLY_IF_TRUE).collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, ONLY_IF_TRUE);
 
     let (rest, statement) = if_statement_parser(tokens).unwrap();
 
@@ -292,7 +314,7 @@ fn test_if_statement_parser() {
             if ('x') {}
         }";
     let tokens: Vec<Token> = Scanner::new(IF_TRUE_IF_FALSE).collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, IF_TRUE_IF_FALSE);
 
     let (rest, statement) = if_statement_parser(tokens).unwrap();
 
@@ -318,9 +340,10 @@ fn test_if_statement_parser() {
 #[test]
 fn test_while_statement_parser() {
     // No body
+    const CODE1: &str = r"while (True) {}";
 
-    let tokens: Vec<Token> = Scanner::new("while (True) {}").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens: Vec<Token> = Scanner::new(CODE1).collect();
+    let tokens = Tokens::new(&tokens, CODE1);
 
     let (rest, statement) = while_statement_parser(tokens).unwrap();
 
@@ -335,11 +358,11 @@ fn test_while_statement_parser() {
 
     // With body
 
-    const CODE: &str = r"while (True) {
+    const CODE2: &str = r"while (True) {
             if (False) {}
         }";
-    let tokens: Vec<Token> = Scanner::new(CODE).collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens: Vec<Token> = Scanner::new(CODE2).collect();
+    let tokens = Tokens::new(&tokens, CODE2);
 
     let (rest, statement) = while_statement_parser(tokens).unwrap();
 
@@ -362,7 +385,7 @@ fn test_assign_statement_parser() {
     // Simple assignment
 
     let tokens: Vec<Token> = Scanner::new("myVar = 123;").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let (rest, statement) = assign_statement_parser(tokens).unwrap();
 
@@ -378,7 +401,7 @@ fn test_assign_statement_parser() {
     // Complex expression
 
     let tokens: Vec<Token> = Scanner::new("myVar = !(myVar && True);").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let (rest, statement) = assign_statement_parser(tokens).unwrap();
 
@@ -403,7 +426,7 @@ fn test_assign_statement_parser() {
     // Field access
 
     let tokens: Vec<Token> = Scanner::new("myVar.fst.snd.tl.hd = [];").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let (rest, statement) = assign_statement_parser(tokens).unwrap();
 
@@ -425,7 +448,7 @@ fn test_fun_call_statement_parser() {
     // No arguments
 
     let tokens: Vec<Token> = Scanner::new("someFunction();").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let (rest, statement) = fun_call_statement_parser(tokens).unwrap();
 
@@ -438,7 +461,7 @@ fn test_fun_call_statement_parser() {
     // With arguments
 
     let tokens: Vec<Token> = Scanner::new("functionCall(123, False);").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let (rest, statement) = fun_call_statement_parser(tokens).unwrap();
 
@@ -460,7 +483,7 @@ fn test_return_statement_parser() {
     // No value
 
     let tokens: Vec<Token> = Scanner::new("return;").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let (rest, statement) = return_statement_parser(tokens).unwrap();
 
@@ -470,7 +493,7 @@ fn test_return_statement_parser() {
     // With value
 
     let tokens: Vec<Token> = Scanner::new("return 54321;").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let (rest, statement) = return_statement_parser(tokens).unwrap();
 
@@ -486,7 +509,7 @@ fn test_fun_decl_type_parser() {
     // No params, void return type
 
     let tokens: Vec<Token> = Scanner::new(":: -> Void").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let (rest, fun_type) = function_type_parser(tokens).unwrap();
 
@@ -496,7 +519,7 @@ fn test_fun_decl_type_parser() {
     // Params and return type
 
     let tokens: Vec<Token> = Scanner::new(":: Int Bool -> Char").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let (rest, fun_type) = function_type_parser(tokens).unwrap();
 
@@ -509,7 +532,7 @@ fn test_fun_decl_type_parser() {
     // Complex types
 
     let tokens: Vec<Token> = Scanner::new(":: (a, [b]) [(Int,c)] -> ((a,b),c)").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let (rest, fun_type) = function_type_parser(tokens).unwrap();
 
@@ -541,7 +564,7 @@ fn test_fun_decl_type_parser() {
 #[test]
 fn test_fun_call_in_return() {
     let tokens: Vec<Token> = Scanner::new("f (x) {return g (x);}").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let r1 = program_parser(tokens);
 
@@ -566,13 +589,13 @@ fn test_fun_call_in_return() {
         }],
     };
 
-    assert_eq!(r1, Ok((Tokens::new(&t1), expected1)));
+    assert_eq!(r1, Ok((Tokens::new(&t1, ""), expected1)));
 }
 
 #[test]
 fn test_variable_in_return() {
     let tokens: Vec<Token> = Scanner::new("f (x) {return g;}").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let r1 = program_parser(tokens);
 
@@ -591,13 +614,13 @@ fn test_variable_in_return() {
         }],
     };
 
-    assert_eq!(r1, Ok((Tokens::new(&t1), expected1)));
+    assert_eq!(r1, Ok((Tokens::new(&t1, ""), expected1)));
 }
 
 #[test]
 fn fest_fun_decl_var_decls_at_start() {
     let tokens: Vec<Token> = Scanner::new("myFun() { var x = 1; var y = 2; return; }").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let (rest, fun_decl) = fun_decl_parser(tokens).unwrap();
     assert!(rest.is_empty());
@@ -624,7 +647,7 @@ fn fest_fun_decl_var_decls_at_start() {
     );
 
     let tokens: Vec<Token> = Scanner::new("myFun() { var x = 1;  return; var y = 2;}").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     assert!(fun_decl_parser(tokens).is_err());
 }
@@ -634,7 +657,7 @@ fn test_fun_decl_parser() {
     // Body with only statements
 
     let tokens: Vec<Token> = Scanner::new("myFun(x, y) { return; }").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let (rest, fun_decl) = fun_decl_parser(tokens).unwrap();
 
@@ -658,7 +681,7 @@ fn test_fun_decl_parser() {
         }";
 
     let tokens: Vec<Token> = Scanner::new(CODE).collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let (rest, fun_decl) = fun_decl_parser(tokens).unwrap();
 
@@ -714,7 +737,7 @@ fn test_type_parser() {
 
     for (code, expected) in types {
         let tokens: Vec<Token> = Scanner::new(code).collect();
-        let tokens = Tokens::new(&tokens);
+        let tokens = Tokens::new(&tokens, "");
 
         let (rest, t) = type_parser(tokens).unwrap();
 
@@ -726,26 +749,26 @@ fn test_type_parser() {
 #[test]
 fn test_unary_expr_parser() {
     let tokens: Vec<Token> = Scanner::new(&"!True").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let r1 = unary_expr_parser(tokens);
-    let t1 = Tokens::new(&[]);
+    let t1 = Tokens::new(&[], "");
     let expected1 = Expr::Not(Box::new(Expr::Atom(Atom::BoolLiteral(true))));
     assert_eq!(r1, Ok((t1, expected1)));
 
     let tokens: Vec<Token> = Scanner::new(&"-3").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let r2 = unary_expr_parser(tokens);
-    let t2 = Tokens::new(&[]);
+    let t2 = Tokens::new(&[], "");
     let expected2 = Expr::UnaryMinus(boxed_int_literal!(3));
     assert_eq!(r2, Ok((t2, expected2)));
 
     let tokens: Vec<Token> = Scanner::new(&"---4").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let r2 = unary_expr_parser(tokens);
-    let t2 = Tokens::new(&[]);
+    let t2 = Tokens::new(&[], "");
     let expected2 = Expr::UnaryMinus(Box::new(Expr::UnaryMinus(Box::new(Expr::UnaryMinus(
         boxed_int_literal!(4),
     )))));
@@ -755,18 +778,18 @@ fn test_unary_expr_parser() {
 #[test]
 fn test_atom_expr_parser() {
     let tokens = [
-        Token::new(TokenKind::Bool(true), 0, 0),
-        Token::new(TokenKind::Identifier("x"), 0, 0),
+        Token::new(TokenKind::Bool(true), 0, 0, 0, 0),
+        Token::new(TokenKind::Identifier("x"), 0, 0, 0, 0),
     ];
 
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let r1 = atom_expr_parser(tokens);
-    let t1 = Tokens::new(&tokens[1..]);
+    let t1 = Tokens::new(&tokens[1..], "");
     assert_eq!(r1, Ok((t1, Expr::Atom(Atom::BoolLiteral(true)))));
 
     let r2 = atom_expr_parser(t1);
-    let t2 = Tokens::new(&tokens[2..]);
+    let t2 = Tokens::new(&tokens[2..], "");
     let var = Variable::new(Id(String::from("x")), Vec::new());
     assert_eq!(r2, Ok((t2, Expr::Atom(Atom::Variable(var)))));
 }
@@ -774,10 +797,10 @@ fn test_atom_expr_parser() {
 #[test]
 fn test_fun_call_parser() {
     let tokens: Vec<Token> = Scanner::new(&"my_fun(123, x.hd, False)").collect();
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let r1 = fun_call_parser(tokens);
-    let t1 = Tokens::new(&[]);
+    let t1 = Tokens::new(&[], "");
 
     let expected1 = FunCall::new(
         Id(String::from("my_fun")),
@@ -797,33 +820,33 @@ fn test_fun_call_parser() {
 #[test]
 fn test_literal_parser() {
     let tokens = [
-        Token::new(TokenKind::Bool(true), 0, 0),
-        Token::new(TokenKind::Char('c'), 1, 0),
-        Token::new(TokenKind::Integer(123u32.into()), 2, 0),
+        Token::new(TokenKind::Bool(true), 0, 0, 0, 0),
+        Token::new(TokenKind::Char('c'), 1, 0, 0, 0),
+        Token::new(TokenKind::Integer(123u32.into()), 2, 0, 0, 0),
         Token::new(
             // No escape sequences, those are handled in the scanner already
             TokenKind::String(r#"Hello " world with \ problematic characters"#.to_string()),
             3,
-            0,
+            0, 0 , 0
         ),
     ];
 
-    let tokens = Tokens::new(&tokens);
+    let tokens = Tokens::new(&tokens, "");
 
     let r1 = literal_atom_parser(tokens);
-    let t1 = Tokens::new(&tokens[1..]);
+    let t1 = Tokens::new(&tokens[1..], "");
     assert_eq!(r1, Ok((t1, Atom::BoolLiteral(true))));
 
     let r2 = literal_atom_parser(t1);
-    let t2 = Tokens::new(&tokens[2..]);
+    let t2 = Tokens::new(&tokens[2..], "");
     assert_eq!(r2, Ok((t2, Atom::CharLiteral('c'))));
 
     let r3 = literal_atom_parser(t2);
-    let t3 = Tokens::new(&tokens[3..]);
+    let t3 = Tokens::new(&tokens[3..], "");
     assert_eq!(r3, Ok((t3, Atom::IntLiteral(123u32.into()))));
 
     let r4 = literal_atom_parser(t3);
-    let t4 = Tokens::new(&tokens[4..]);
+    let t4 = Tokens::new(&tokens[4..], "");
     assert_eq!(
         r4,
         Ok((
