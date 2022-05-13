@@ -12,6 +12,11 @@ id_int(x) {
 main() {
     var i = id(1);
     var b = id(True);
+    var l = id(3 : []);
+
+    print(i);
+    print(b);
+    print(l.hd);
 
     return;
 }

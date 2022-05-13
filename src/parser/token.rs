@@ -1,4 +1,4 @@
-use crate::error::ErrorKind;
+use super::error::LexerErrorKind;
 
 use nom::{InputIter, InputLength, InputTake, Needed, Slice};
 
@@ -8,7 +8,7 @@ use std::fmt;
 use std::iter::Enumerate;
 use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub struct Tokens<'a> {
     inner: &'a [Token<'a>],
     pub raw: &'a str,
@@ -27,30 +27,6 @@ impl<'a> Tokens<'a> {
         self.inner.is_empty()
     }
 }
-
-// impl<'a> Deref for Tokens<'a> {
-//     type Target = str;
-//     fn deref(&self) -> &'a str {
-//         if self.raw.len() > 1 && self.inner.len() > 1 {
-//             let hd = &self.inner[0];
-//             if self.raw.len() > hd.index {
-//                 if self.raw.len() > hd.index + hd.size - 1 {
-//                     &self.raw[hd.index..hd.index + hd.size - 1]
-//                 } else {
-//                     &self.raw[hd.index..]
-//                 }
-//             } else {
-//                 &self.raw
-//             }
-//         }
-//         //
-
-//         // println!("Deref, first token index: {:?}", hd.index);
-//         else {
-//             &self.raw
-//         }
-//     }
-// }
 
 impl<'a> InputLength for Tokens<'a> {
     fn input_len(&self) -> usize {
@@ -342,7 +318,7 @@ pub enum TokenKind<'a> {
     ClosingSquare,
 
     /// Errors
-    Error(ErrorKind),
+    Error(LexerErrorKind),
 }
 
 impl<'a> TokenKind<'a> {

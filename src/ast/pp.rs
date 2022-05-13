@@ -83,7 +83,7 @@ impl PrettyPrintable for VarDecl {
                 .to_pretty()
                 .join(self.name.to_pretty())
                 .join(" = ")
-                .join(self.value.to_pretty())
+                .join(self.value.expr.to_pretty())
                 .join(";"),
         )
     }
@@ -182,7 +182,7 @@ impl PrettyPrintable for Statement {
             Statement::Assign(a) => a.to_pretty(),
             Statement::FunCall(f) => Box::new(f.to_pretty().join(";")),
             Statement::Return(e) => match e {
-                Some(e) => Box::new("return ".join(e.to_pretty()).join(";")),
+                Some(e) => Box::new("return ".join(e.expr.to_pretty()).join(";")),
                 None => Box::new("return;"),
             },
         }
@@ -208,7 +208,7 @@ fn to_pretty_else_case(false_body: &Vec<Statement>) -> Box<dyn Pretty> {
 impl PrettyPrintable for If {
     fn to_pretty(&self) -> Box<dyn Pretty> {
         Box::new(
-            "if (".join(self.cond.to_pretty()).join(") {").join(
+            "if (".join(self.cond.expr.to_pretty()).join(") {").join(
                 block(delimited(
                     &"".join(Sep(1)),
                     self.if_true.iter().map(Statement::to_pretty),
@@ -225,6 +225,7 @@ impl PrettyPrintable for While {
         Box::new(
             "while (".join(
                 self.cond
+                    .expr
                     .to_pretty()
                     .join(") {")
                     .join(block(delimited(
@@ -243,7 +244,7 @@ impl PrettyPrintable for Assign {
             self.target
                 .to_pretty()
                 .join(" = ")
-                .join(self.value.to_pretty())
+                .join(self.value.expr.to_pretty())
                 .join(";"),
         )
     }
@@ -305,7 +306,7 @@ impl PrettyPrintable for FunCall {
             self.name.0.to_string().join("(").join(
                 block(delimited(
                     &",".join(Sep(1)),
-                    self.args.iter().map(Expr::to_pretty),
+                    self.args.iter().map(|e| e.expr.to_pretty()),
                 ))
                 .join(")"),
             ),
@@ -337,8 +338,6 @@ mod test {
     use super::*;
 
     use crate::parser::*;
-    use crate::scanner::Scanner;
-    use crate::token::{Token, Tokens};
 
     use pretty_trait::to_string;
 
@@ -347,13 +346,13 @@ mod test {
     fn pp_tester(filename: &str) {
         let input = fs::read_to_string(filename).unwrap();
         let scanner = Scanner::new(&input);
-        let tokens: Vec<Token> = scanner.collect();
+        let tokens: Vec<Token> = scanner.unwrap().collect();
         let tokens = Tokens::new(&tokens, "");
 
         let (_, ast1) = program_parser(tokens).unwrap();
         let output = to_string(&ast1.to_pretty(), Some(40), 4);
         let scanner = Scanner::new(&output);
-        let tokens: Vec<Token> = scanner.collect();
+        let tokens: Vec<Token> = scanner.unwrap().collect();
         let tokens = Tokens::new(&tokens, "");
 
         let (_, ast2) = program_parser(tokens).unwrap();

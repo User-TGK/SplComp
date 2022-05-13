@@ -1,0 +1,11 @@
+foo(x) :: Int -> Void {
+    x = 10;
+    print(x);
+}
+
+main() :: -> Void {
+    var x = 5;
+    foo(x);
+
+    print(x);
+}

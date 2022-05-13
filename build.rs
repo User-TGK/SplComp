@@ -15,7 +15,7 @@ fn test_{name}() {{
     const CODE: &str = r#"
 {content}
 "#;
-    let tokens: Vec<Token> = Scanner::new(CODE).collect();
+    let tokens: Vec<Token> = Scanner::new(CODE).unwrap().collect();
     let tokens = Tokens::new(&tokens, CODE);
 
     let result = program_parser(tokens);
@@ -26,6 +26,17 @@ fn test_{name}() {{
             
             let (rest, mut program) = result.unwrap();
             assert!(rest.is_empty(), "Unconsumed input: {{:#?}}", rest);
+
+            let funcs: Vec<String> = program.fun_decls.iter().map(|f| f.name.clone().0).collect();
+            if !funcs.contains(&String::from("main")) {{
+                program.fun_decls.push(FunDecl {{
+                    name: Id(String::from("main")),
+                    params: vec![],
+                    fun_type: None,
+                    var_decls: vec![],
+                    statements: vec![Statement::Return(None)],
+                }});
+            }}
 
             match {should_type_check} {{
                 true => {{

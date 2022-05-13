@@ -1,6 +1,5 @@
 pub mod ast;
+pub mod codegen;
 pub mod error;
 pub mod parser;
-pub mod scanner;
 pub mod tc;
-pub mod token;

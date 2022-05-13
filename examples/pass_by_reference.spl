@@ -1,0 +1,11 @@
+head_to_one(list) :: [Int] -> Void {
+    list.hd = 1;
+}
+
+main() {
+    var list = 0 : [];
+    print(list.hd);
+
+    head_to_one(list);
+    print(list.hd);
+}

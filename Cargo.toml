@@ -2,14 +2,15 @@
 name = "spl-compiler"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["Ties (Group 3) <tg.klappe@gmail.com>"]
 
 [dependencies]
-
+thiserror = { version = "1.0.30", default-features = false }
+clap = { version = "3.1.18", features = ["derive"] }
 regex = "1.5.4"
 nom = "^7.1.0"
 num-bigint = "^0.4.3"
+num-traits = "0.2.15"
 pretty-trait="0.1.2"
 log = { version = "0.4" }
 simple_logger = { version = "2.1.0", default-features = false }

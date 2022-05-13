@@ -430,7 +430,7 @@ impl TypeInference for Variable {
                         let builtin_identifier = f.builtin_identifier();
                         call_expr = Expr::Atom(Atom::FunCall(FunCall::new(
                             builtin_identifier,
-                            vec![call_expr],
+                            vec![call_expr.into()],
                         )));
                     }
 
@@ -504,7 +504,7 @@ impl TypeInference for Statement {
                             let builtin_identifier = f.builtin_identifier();
                             call_expr = Expr::Atom(Atom::FunCall(FunCall::new(
                                 builtin_identifier,
-                                vec![call_expr],
+                                vec![call_expr.into()],
                             )));
                         }
 
@@ -685,6 +685,21 @@ impl TypeInference for VarDecl {
                 "VarDecl inference specialized to non-type var type.",
             ))
         }
+    }
+}
+
+impl TypeInference for TypedExpr {
+    fn infer(
+        &mut self,
+        context: &Context,
+        expected: &Type,
+        generator: &mut VarGenerator,
+    ) -> Result<Subst, String> {
+        let s = self.expr.infer(context, expected, generator)?;
+
+        self.expr_type = Some(expected.apply(&s));
+
+        Ok(s)
     }
 }
 

@@ -1,15 +1,34 @@
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ErrorKind {
-    // Lexer errors
-    IllegalToken(String),
-    UnclosedMultiLineComment,
-    IllegalEscape(String),
+use crate::parser;
 
-    Unknown,
+use thiserror::Error as ThisError;
+
+#[derive(ThisError)]
+pub enum Error {
+    #[error("Error reading from input file")]
+    IOError(#[from] std::io::Error),
+
+    #[error("Remaining input could not be parsed")]
+    RemainingInput(String),
+
+    /// An error during lexing that will not be recovered.
+    #[error("Error during lexing")]
+    LexerError(#[from] parser::error::LexerErrorKind),
+
+    /// An error during parsing.
+    #[error("Error during parsing")]
+    ParserError(String),
+
+    #[error("Error during binding time analysis, type checking or return path analysis")]
+    SemanticsError(String),
 }
 
-impl Default for ErrorKind {
-    fn default() -> Self {
-        Self::Unknown
+impl std::fmt::Debug for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::IOError(e) => write!(f, "IO \n\n {:?}", &e),
+            Error::RemainingInput(e) => write!(f, "Remaining input \n\n {}", &e),
+            Error::LexerError(e) => write!(f, "\n\n {}", &e),
+            Error::ParserError(e) | Error::SemanticsError(e) => write!(f, "\n\n {}", &e),
+        }
     }
 }
