@@ -1,0 +1,8 @@
+main() {
+    if (False) {
+        return 1;
+    }
+    else {
+        return 2;
+    }
+}

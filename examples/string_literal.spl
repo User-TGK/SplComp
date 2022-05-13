@@ -1,0 +1,10 @@
+var str = "Hello";
+//var str = 'H' : 'e' : 'l' : 'l' : 'o' : []; 
+
+main() {
+    print(str.hd);
+    print(str.tl.hd);
+    print(str.tl.tl.hd);
+    print(str.tl.tl.tl.hd);
+    print(str.tl.tl.tl.tl.hd);
+}

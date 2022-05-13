@@ -46,10 +46,10 @@ impl DerefMut for Id {
 }
 
 #[derive(PartialEq, Debug)]
-pub struct  VarDecl {
+pub struct VarDecl {
     pub var_type: Option<Type>,
     pub name: Id,
-    pub value: Expr,
+    pub value: TypedExpr,
 }
 
 #[derive(PartialEq, Debug)]
@@ -79,37 +79,52 @@ pub enum Statement {
     While(While),
     Assign(Assign),
     FunCall(FunCall),
-    Return(Option<Expr>),
+    Return(Option<TypedExpr>),
 }
 
 #[derive(PartialEq, Debug)]
 pub struct If {
-    pub cond: Expr,
+    pub cond: TypedExpr,
     pub if_true: Vec<Statement>,
     pub if_false: Vec<Statement>,
 }
 
 #[derive(PartialEq, Debug)]
 pub struct While {
-    pub cond: Expr,
+    pub cond: TypedExpr,
     pub body: Vec<Statement>,
 }
 
 #[derive(PartialEq, Debug)]
 pub struct Assign {
     pub target: Variable,
-    pub value: Expr,
+    pub value: TypedExpr,
 }
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct FunCall {
     pub(crate) name: Id,
-    pub(crate) args: Vec<Expr>,
+    pub(crate) args: Vec<TypedExpr>,
 }
 
 impl FunCall {
-    pub fn new(name: Id, args: Vec<Expr>) -> Self {
+    pub fn new(name: Id, args: Vec<TypedExpr>) -> Self {
         Self { name, args }
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub struct TypedExpr {
+    pub expr_type: Option<Type>,
+    pub expr: Expr,
+}
+
+impl From<Expr> for TypedExpr {
+    fn from(expr: Expr) -> Self {
+        Self {
+            expr_type: None,
+            expr,
+        }
     }
 }
 

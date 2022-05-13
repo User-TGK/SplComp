@@ -1,0 +1,15 @@
+prepend_1(list) {
+    list = 1 : list;
+    print('p');
+    print(list.hd);
+}
+
+main() {
+    var list = 2 : [];
+    prepend_1(list);
+
+    print('m');
+    print(list.hd);
+
+    return;
+}

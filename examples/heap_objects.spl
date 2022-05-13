@@ -1,0 +1,15 @@
+var int_list_1 = 1 : 2 : [];
+var int_list_2 = 3 : 4 : [];
+
+var weird = ( (1 : 2 : []),  ( 'a', (int_list_1 : int_list_2 : []) ) );
+
+main() {
+    print(weird.fst.hd);
+    print(weird.fst.tl.hd);
+
+    print(weird.snd.fst);
+    print(weird.snd.snd.hd.hd);
+    print(weird.snd.snd.hd.tl.hd);
+    print(weird.snd.snd.tl.hd.hd);
+    print(weird.snd.snd.tl.hd.tl.hd);
+}

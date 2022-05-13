@@ -1,5 +1,5 @@
-use crate::error::ErrorKind;
-use crate::token::{Token, TokenKind};
+use super::error::LexerErrorKind;
+use super::token::{Token, TokenKind};
 
 use regex::Regex;
 
@@ -18,23 +18,27 @@ pub struct Scanner<'a> {
 
 impl<'a> Scanner<'a> {
     /// Constructs a new scanner.
-    pub fn new(text: &'a str) -> Self {
+    pub fn new(text: &'a str) -> Result<Self, LexerErrorKind> {
         let regex_groups: Vec<_> = Token::lexical_analysis_order()
             .map(|t| format!("(?P<{}>{})", t.name(), t.pattern().unwrap()))
             .collect();
         let regex = regex_groups.join("|");
 
-        Self {
+        if text.is_empty() {
+            return Err(LexerErrorKind::EmptyInput);
+        }
+
+        Ok(Self {
             text,
             line: 0,
             column: 0,
             index: 0,
             regex: Regex::new(&regex).unwrap(),
-        }
+        })
     }
 
     /// Constructs a new error token from an error kind.
-    pub fn error_token(&self, kind: ErrorKind, size: usize) -> Token<'a> {
+    pub fn error_token(&self, kind: LexerErrorKind, size: usize) -> Token<'a> {
         Token::new(
             TokenKind::Error(kind),
             self.line,
@@ -115,7 +119,7 @@ impl<'a> Iterator for Scanner<'a> {
                         // Return an error for unclosed multi-line comments
 
                         let err = Token {
-                            kind: TokenKind::Error(ErrorKind::UnclosedMultiLineComment),
+                            kind: TokenKind::Error(LexerErrorKind::UnclosedMultiLineComment),
                             line: self.line,
                             column: self.column,
                             index: self.index,
@@ -148,7 +152,7 @@ impl<'a> Iterator for Scanner<'a> {
                     if m.start() != 0 {
                         let illegal_token = self.text[0..m.start()].to_string();
                         let e = Some(
-                            self.error_token(ErrorKind::IllegalToken(illegal_token), m.start()),
+                            self.error_token(LexerErrorKind::IllegalToken(illegal_token), m.start()),
                         );
 
                         self.update_line_column_for_new_index(m.start());
@@ -178,7 +182,7 @@ impl<'a> Iterator for Scanner<'a> {
                                 "\\t" => '\t',
                                 _ if chars.starts_with('\\') => {
                                     let e = Some(self.error_token(
-                                        ErrorKind::IllegalEscape(chars.to_string()),
+                                        LexerErrorKind::IllegalEscape(chars.to_string()),
                                         m.end(),
                                     ));
 
@@ -230,7 +234,7 @@ mod test {
     use super::*;
 
     fn single_token_test_helper(text: &str, expected_token: TokenKind, expected_size: usize) {
-        let mut scanner = Scanner::new(text);
+        let mut scanner = Scanner::new(text).unwrap();
 
         assert_eq!(
             scanner.next(),
@@ -241,7 +245,7 @@ mod test {
 
     #[test]
     fn test_remove_single_line_comment() {
-        let mut scanner = Scanner::new("// This is a comment.");
+        let mut scanner = Scanner::new("// This is a comment.").unwrap();
         assert_eq!(scanner.next(), None);
     }
 
@@ -253,7 +257,7 @@ mod test {
         This is the third line of the comment.
         */";
 
-        let mut scanner = Scanner::new(multiline_comment);
+        let mut scanner = Scanner::new(multiline_comment).unwrap();
         assert_eq!(scanner.next(), None);
     }
 
@@ -262,11 +266,11 @@ mod test {
         let broken_comment = r"/*
         This is a broken comment";
 
-        let mut scanner = Scanner::new(broken_comment);
+        let mut scanner = Scanner::new(broken_comment).unwrap();
         assert_eq!(
             scanner.next(),
             Some(Token {
-                kind: TokenKind::Error(ErrorKind::UnclosedMultiLineComment),
+                kind: TokenKind::Error(LexerErrorKind::UnclosedMultiLineComment),
                 line: 0,
                 column: 0,
                 index: 0,
@@ -399,7 +403,7 @@ mod test {
         single_token_test_helper("'\\t'", TokenKind::Char('\t'), 4);
         single_token_test_helper(
             "'\\x'",
-            TokenKind::Error(ErrorKind::IllegalEscape("\\x".to_string())),
+            TokenKind::Error(LexerErrorKind::IllegalEscape("\\x".to_string())),
             4,
         );
     }
@@ -546,7 +550,7 @@ mod test {
     #[test]
     fn test_integer_evaluation_loop() {
         let text = r"1-2-3;";
-        let mut scanner = Scanner::new(text);
+        let mut scanner = Scanner::new(text).unwrap();
 
         assert_eq!(
             scanner.next(),
@@ -579,7 +583,7 @@ mod test {
         let text = r"  // Some commentary on this code...
                             while(month < 12) {}";
 
-        let mut scanner = Scanner::new(text);
+        let mut scanner = Scanner::new(text).unwrap();
 
         assert_eq!(
             scanner.next(),
@@ -593,7 +597,10 @@ mod test {
             scanner.next(),
             Some(Token::new(TokenKind::Identifier("month"), 1, 34, 71, 5))
         );
-        assert_eq!(scanner.next(), Some(Token::new(TokenKind::Lt, 1, 40, 77, 1)));
+        assert_eq!(
+            scanner.next(),
+            Some(Token::new(TokenKind::Lt, 1, 40, 77, 1))
+        );
         assert_eq!(
             scanner.next(),
             Some(Token::new(TokenKind::Integer(12u32.into()), 1, 42, 79, 2))
@@ -616,7 +623,7 @@ mod test {
     pub fn test_correct_line_column_updates() {
         let text = "{\n_illegal\n}";
 
-        let mut scanner = Scanner::new(text);
+        let mut scanner = Scanner::new(text).unwrap();
 
         assert_eq!(scanner.line, 0);
         assert_eq!(scanner.column, 0);

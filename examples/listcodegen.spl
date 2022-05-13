@@ -1,0 +1,7 @@
+var as = 1 : (2 : []);
+
+main() {
+    var x = as.hd;
+
+    return x;
+}

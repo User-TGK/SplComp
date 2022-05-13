@@ -1,11 +1,17 @@
-mod error;
+pub mod error;
 #[cfg(test)]
 mod test;
 
-use crate::ast::*;
-use crate::token::*;
+mod scanner;
+mod token;
 
-use error::Error;
+use crate::ast::*;
+use token::*;
+
+pub use scanner::Scanner;
+pub use token::{Token, Tokens};
+
+pub use error::Error;
 
 use nom::branch::alt;
 use nom::bytes::complete::take;
@@ -235,7 +241,7 @@ fn var_decl_parser(tokens: Tokens) -> IResult<Tokens, VarDecl, Error> {
             |(var_type, name, _, value, _)| VarDecl {
                 var_type,
                 name,
-                value,
+                value: value.into(),
             },
         ),
     )(tokens)
@@ -299,7 +305,7 @@ fn if_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, Error> {
             )),
             |(_, cond, if_true, if_false)| {
                 Statement::If(If {
-                    cond,
+                    cond: cond.into(),
                     if_true,
                     if_false: if_false.unwrap_or_else(Vec::new),
                 })
@@ -323,7 +329,12 @@ fn while_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, Error> {
                     ),
                 ),
             ),
-            |(cond, body)| Statement::While(While { cond, body }),
+            |(cond, body)| {
+                Statement::While(While {
+                    cond: cond.into(),
+                    body,
+                })
+            },
         ),
     )(tokens)
 }
@@ -341,7 +352,7 @@ fn assign_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, Error> 
             |((id, fields), _, value, _)| {
                 Statement::Assign(Assign {
                     target: Variable::new(id, fields),
-                    value,
+                    value: value.into(),
                 })
             },
         ),
@@ -363,7 +374,10 @@ fn return_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, Error> 
         "return statement",
         map(
             delimited(return_parser, opt(expr_parser), semicolon_parser),
-            Statement::Return,
+            |r| match r {
+                Some(e) => Statement::Return(Some(e.into())),
+                None => Statement::Return(None),
+            },
         ),
     )(tokens)
 }
@@ -614,6 +628,6 @@ fn fun_call_parser(tokens: Tokens) -> IResult<Tokens, FunCall, Error> {
             separated_list0(comma_parser, expr_parser),
             closing_paren_parser,
         )),
-        |(id, _, args, _)| FunCall::new(id, args),
+        |(id, _, args, _)| FunCall::new(id, args.into_iter().map(|a| a.into()).collect()),
     )(tokens)
 }

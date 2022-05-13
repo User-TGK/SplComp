@@ -1,0 +1,6 @@
+f(x) {
+    x.hd.fst = 'a';
+    x.hd.snd.fst = 5;
+    x.hd.snd.snd = 1 : [];
+    return x;
+}

@@ -1,11 +1,9 @@
 use super::*;
 
 use crate::parser::*;
-use crate::scanner::*;
-use crate::token::*;
 
 fn typing_error_test_helper(input: &str, err: &str) {
-    let tokens: Vec<Token> = Scanner::new(input).collect();
+    let tokens: Vec<Token> = Scanner::new(input).unwrap().collect();
     let tokens = Tokens::new(&tokens, "");
 
     let (rest, mut program) = program_parser(tokens).unwrap();
@@ -15,7 +13,7 @@ fn typing_error_test_helper(input: &str, err: &str) {
 }
 
 fn typing_success_test_helper(input: &str, expected_output: &str) {
-    let tokens: Vec<Token> = Scanner::new(input).collect();
+    let tokens: Vec<Token> = Scanner::new(input).unwrap().collect();
     let tokens = Tokens::new(&tokens, "");
 
     let (rest, mut program) = program_parser(tokens).unwrap();
@@ -23,11 +21,13 @@ fn typing_success_test_helper(input: &str, expected_output: &str) {
 
     assert_eq!(Ok(()), run(&mut program));
 
-    let ttokens: Vec<Token> = Scanner::new(expected_output).collect();
+    let ttokens: Vec<Token> = Scanner::new(expected_output).unwrap().collect();
     let ttokens = Tokens::new(&ttokens, "");
 
-    let (trest, typed_program) = program_parser(ttokens).unwrap();
+    let (trest, mut typed_program) = program_parser(ttokens).unwrap();
     assert!(trest.is_empty());
+
+    assert_eq!(Ok(()), run(&mut typed_program));
 
     assert_eq!(program, typed_program)
 }
@@ -35,17 +35,25 @@ fn typing_success_test_helper(input: &str, expected_output: &str) {
 #[test]
 fn test_int_comparison_inference() {
     const PROGRAM: &str = r"
+        main() {
             var ge = 123 >= 456;
             var le = 123 <= 456;
             var gt = 123 > 456;
             var lt = 123 < 456;
+
+            return;
+        }
         ";
 
     const TYPED_PROGRAM: &str = r"
-        Bool ge = 123 >= 456;
-        Bool le = 123 <= 456;
-        Bool gt = 123 > 456;
-        Bool lt = 123 < 456;
+        main() :: -> Void {
+            Bool ge = 123 >= 456;
+            Bool le = 123 <= 456;
+            Bool gt = 123 > 456;
+            Bool lt = 123 < 456;
+
+            return;
+        }
     ";
 
     typing_success_test_helper(PROGRAM, TYPED_PROGRAM);
@@ -54,15 +62,23 @@ fn test_int_comparison_inference() {
 #[test]
 fn test_bool_ops() {
     const PROGRAM: &str = r"
+        main() {
             var and = True && True;
             var or = False || True;
             var not = !False;
+
+            return;
+        }
         ";
 
     const TYPED_PROGRAM: &str = r"
+    main() :: -> Void {
         Bool and = True && True;
         Bool or = False || True;
         Bool not = !False;
+
+        return;
+    }
     ";
 
     typing_success_test_helper(PROGRAM, TYPED_PROGRAM);
@@ -71,15 +87,23 @@ fn test_bool_ops() {
 #[test]
 fn test_tuple_inference() {
     const PROGRAM: &str = r"
+        main() {
             var bool_tuple = (False, True);
             var int_tuple = (123, 456);
             var tuple_tuple = ((1, 2), (4, 5));
+
+            return;
+        }
         ";
 
     const TYPED_PROGRAM: &str = r"
+        main() :: -> Void {
             (Bool, Bool) bool_tuple = (False, True);
             (Int, Int) int_tuple = (123, 456);
             ((Int, Int), (Int, Int)) tuple_tuple = ((1, 2), (4, 5));
+
+            return;
+        }
         ";
 
     typing_success_test_helper(PROGRAM, TYPED_PROGRAM);
@@ -88,11 +112,15 @@ fn test_tuple_inference() {
 #[test]
 fn test_list_not_generalized() {
     const PROGRAM: &str = r"
+        main() :: -> Void {
             var intlist = [];
             var intlist2 = 3 : intlist;
 
             // If the types were generalized, this would be accepted.
             var intlist3 = True : intlist2;
+
+            return;
+        }
         ";
 
     typing_error_test_helper(PROGRAM, "Unification error: Bool and Int");
@@ -101,13 +129,21 @@ fn test_list_not_generalized() {
 #[test]
 fn test_overloaded_ops() {
     const PROGRAM: &str = r"
+        main() {
             var char_eq = 'a' == 'b';
             var int_eq = 1 == 1;
+
+            return;
+        }
         ";
 
     const TYPED_PROGRAM: &str = r"
-        Bool char_eq = 'a' == 'b';
-        Bool int_eq = 1 == 1;
+        main() :: -> Void {
+            Bool char_eq = 'a' == 'b';
+            Bool int_eq = 1 == 1;
+
+            return;
+        }
     ";
 
     typing_success_test_helper(PROGRAM, TYPED_PROGRAM);
@@ -151,6 +187,10 @@ fn test_void_expr_from_fun_call() {
 
             return;
         }
+
+        main() {
+            return;
+        }
     ";
 
     typing_error_test_helper(
@@ -167,6 +207,10 @@ fn test_void_expr_from_fun_call() {
             var v = voidFun();
 
             return v;
+        }
+
+        main() {
+            return;
         }
     ";
 
@@ -186,6 +230,10 @@ fn test_missing_return_if() {
 
             }
         }
+
+        main() {
+            return;
+        }
     ";
 
     const TYPED_PROGRAM0: &str = r"
@@ -195,6 +243,10 @@ fn test_missing_return_if() {
             } else {
 
             }
+            return;
+        }
+
+        main() {
             return;
         }
     ";
@@ -209,6 +261,10 @@ fn test_missing_return_if() {
 
             }
         }
+
+        main() {
+            return;
+        }
     ";
 
     typing_error_test_helper(PROGRAM1, "Function id has a missing return");
@@ -220,6 +276,10 @@ fn test_missing_return_if() {
             } else {
                 return;
             }
+        }
+
+        main() {
+            return;
         }
     ";
 
@@ -233,6 +293,10 @@ fn test_missing_return_if() {
                 return;
             }
         }
+
+        main() {
+            return;
+        }
     ";
 
     const TYPED_PROGRAM3: &str = r"
@@ -242,6 +306,10 @@ fn test_missing_return_if() {
             } else {
                 return;
             }
+        }
+
+        main() :: -> Void {
+            return;
         }
     ";
 

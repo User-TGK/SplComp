@@ -1,0 +1,32 @@
+//prepend_5(list) {
+//    list.hd = 5;
+//}
+//
+//append (x, y) {
+//	var r = x;
+//	if (isEmpty(x)) {
+//		return y;
+//	}
+//	while (!isEmpty(r.tl)) {
+//		r = r.tl;
+//	}
+//	r.tl = y;
+//	return x;
+//}
+
+
+product ( list ) :: [Int] -> Int {
+    if ( isEmpty ( list ) ) {
+        return 1;
+    } else {
+        return list.hd * product ( list.tl );
+    }
+}
+
+main() {
+    var l = 2 : 1 : [];
+    var p = product(l);
+
+    print(p);
+    return;
+}

@@ -1,0 +1,13 @@
+foo() :: -> Void {
+
+    return;
+}
+
+bar() {
+    foo();
+}
+
+main() {
+    print(3);
+    return;
+}
