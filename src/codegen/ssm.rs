@@ -1,4 +1,5 @@
 use crate::ast::*;
+use crate::tc::{tarjan::ContainsIdentifier, TypeInstance};
 
 use super::builtin::*;
 
@@ -19,20 +20,20 @@ pub const NULL_PTR: u32 = 0x00;
 
 macro_rules! unary_expr(
     ($e:expr, $env:expr, $heap_offset:expr, $prefix_gen:expr, $instruction:expr) => (
-        $e.instructions($env, $heap_offset, $prefix_gen)
+        Ok($e.instructions($env, $heap_offset, $prefix_gen)?
             .into_iter()
             .chain(vec![$instruction])
-            .collect()
+            .collect())
     )
 );
 
 macro_rules! bin_exp (
     ($e1:expr, $e2:expr, $env:expr, $heap_offset:expr, $prefix_gen:expr, $instruction:expr) => (
-        $e1.instructions($env, $heap_offset, $prefix_gen)
+        Ok($e1.instructions($env, $heap_offset, $prefix_gen)?
             .into_iter()
-            .chain($e2.instructions($env, $heap_offset, $prefix_gen).into_iter())
+            .chain($e2.instructions($env, $heap_offset, $prefix_gen)?.into_iter())
             .chain(vec![$instruction])
-            .collect()
+            .collect())
     )
 );
 
@@ -56,7 +57,7 @@ pub trait SsmInstructions {
         env: &mut LocationEnv,
         heap_offset: &mut i32,
         prefix_gen: &mut LabelPrefixGenerator,
-    ) -> Vec<SsmInstruction>;
+    ) -> Result<Vec<SsmInstruction>, String>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -272,24 +273,23 @@ impl LocationEnv {
     }
 
     /// Returns the instructions to load a variable on the stack.
-    pub fn load(&self, name: Id) -> Vec<SsmInstruction> {
+    pub fn load(&self, name: Id) -> Result<Vec<SsmInstruction>, String> {
         match (
             self.get(&(name.clone(), SsmScope::Local)),
             self.get(&(name.clone(), SsmScope::LocalArgs)),
             self.get(&(name.clone(), SsmScope::Global)),
         ) {
             (Some(a), _, _) | (_, Some(a), _) | (_, _, Some(a)) => match a {
-                SsmLocation::Stack(offset) => vec![SsmInstruction::Ldl(*offset)],
-                SsmLocation::Heap(offset) => vec![
+                SsmLocation::Stack(offset) => Ok(vec![SsmInstruction::Ldl(*offset)]),
+                SsmLocation::Heap(offset) => Ok(vec![
                     SsmInstruction::Ldr(SHP.into()),
                     SsmInstruction::Ldh(*offset),
-                ],
+                ]),
             },
 
-            // This should be unreachable. But just in case, lets print an error.
+            // This should be unreachable. But just in case I messed up, lets return an error.
             (None, None, None) => {
-                log::error!("MISSING IDENTIFIER '{}' IN ENV.", name);
-                vec![]
+                return Err(format!("Missing variable identifier {}", name));
             }
         }
     }
@@ -347,7 +347,7 @@ impl SsmInstructions for Program {
         env: &mut LocationEnv,
         heap_offset: &mut i32,
         prefix_gen: &mut LabelPrefixGenerator,
-    ) -> Vec<SsmInstruction> {
+    ) -> Result<Vec<SsmInstruction>, String> {
         // Load heap pointer to R5 so we know the start.
         let mut instructions = vec![
             SsmInstruction::Ldr(String::from("HP")),
@@ -356,7 +356,7 @@ impl SsmInstructions for Program {
 
         // Store globals on the heap.
         for v in &self.var_decls {
-            instructions.append(&mut v.value.instructions(env, heap_offset, prefix_gen));
+            instructions.append(&mut v.value.instructions(env, heap_offset, prefix_gen)?);
             instructions.push(SsmInstruction::Sth);
             instructions.push(SsmInstruction::Ajs(-1));
 
@@ -372,13 +372,13 @@ impl SsmInstructions for Program {
         instructions.push(SsmInstruction::Halt);
 
         for f in &self.fun_decls {
-            instructions.append(&mut f.instructions(env, heap_offset, prefix_gen));
+            instructions.append(&mut f.instructions(env, heap_offset, prefix_gen)?);
 
             env.remove_locals();
         }
 
         instructions.push(SsmInstruction::Halt);
-        instructions
+        Ok(instructions)
     }
 }
 
@@ -388,7 +388,16 @@ impl SsmInstructions for FunDecl {
         env: &mut LocationEnv,
         heap_offset: &mut i32,
         prefix_gen: &mut LabelPrefixGenerator,
-    ) -> Vec<SsmInstruction> {
+    ) -> Result<Vec<SsmInstruction>, String> {
+        let statement_fun_calls = &self.statements.function_calls();
+        if statement_fun_calls.contains(&Id(String::from("print"))) {
+            if let Some(t) = &self.fun_type {
+                if !t.ftv().is_empty() {
+                    return Err(format!("Function {} makes an illegal call to overloaded function 'print' which would make {} overloaded.", self.name, self.name));
+                }
+            }
+        }
+
         let mut instructions = vec![];
 
         instructions.push(SsmInstruction::Label(self.name.0.clone()));
@@ -407,7 +416,7 @@ impl SsmInstructions for FunDecl {
         let mut offset_local = 1;
 
         for v in &self.var_decls {
-            instructions.append(&mut v.value.instructions(env, heap_offset, prefix_gen));
+            instructions.append(&mut v.value.instructions(env, heap_offset, prefix_gen)?);
             instructions.push(SsmInstruction::Stl(offset_local));
             env.insert(
                 (v.name.clone(), SsmScope::Local),
@@ -418,10 +427,10 @@ impl SsmInstructions for FunDecl {
         }
 
         for s in &self.statements {
-            instructions.append(&mut s.instructions(env, heap_offset, prefix_gen));
+            instructions.append(&mut s.instructions(env, heap_offset, prefix_gen)?);
         }
 
-        instructions
+        Ok(instructions)
     }
 }
 
@@ -431,7 +440,7 @@ impl SsmInstructions for Statement {
         env: &mut LocationEnv,
         heap_offset: &mut i32,
         prefix_gen: &mut LabelPrefixGenerator,
-    ) -> Vec<SsmInstruction> {
+    ) -> Result<Vec<SsmInstruction>, String> {
         match self {
             Statement::If(i) => i.instructions(env, heap_offset, prefix_gen),
             Statement::While(w) => w.instructions(env, heap_offset, prefix_gen),
@@ -440,16 +449,14 @@ impl SsmInstructions for Statement {
             // Can we use the same instructions as for expression funcalls?
             Statement::FunCall(f) => f.instructions(env, heap_offset, prefix_gen),
 
-            Statement::Return(None) => {
-                vec![SsmInstruction::Unlink, SsmInstruction::Ret]
-            }
+            Statement::Return(None) => Ok(vec![SsmInstruction::Unlink, SsmInstruction::Ret]),
             Statement::Return(Some(r)) => {
-                let mut instructions = r.instructions(env, heap_offset, prefix_gen);
+                let mut instructions = r.instructions(env, heap_offset, prefix_gen)?;
                 instructions.push(SsmInstruction::Str(RR.into()));
                 instructions.push(SsmInstruction::Unlink);
                 instructions.push(SsmInstruction::Ret);
 
-                instructions
+                Ok(instructions)
             }
         }
     }
@@ -461,8 +468,8 @@ impl SsmInstructions for If {
         env: &mut LocationEnv,
         heap_offset: &mut i32,
         prefix_gen: &mut LabelPrefixGenerator,
-    ) -> Vec<SsmInstruction> {
-        let mut instructions = self.cond.instructions(env, heap_offset, prefix_gen);
+    ) -> Result<Vec<SsmInstruction>, String> {
+        let mut instructions = self.cond.instructions(env, heap_offset, prefix_gen)?;
         let prefix = prefix_gen.new_prefix();
 
         let true_label = prefix.clone() + "true_banch";
@@ -478,7 +485,7 @@ impl SsmInstructions for If {
         instructions.push(SsmInstruction::Label(true_label));
 
         for s in &self.if_true {
-            instructions.append(&mut s.instructions(env, heap_offset, prefix_gen));
+            instructions.append(&mut s.instructions(env, heap_offset, prefix_gen)?);
         }
 
         instructions.push(SsmInstruction::Bra(finished_label.clone()));
@@ -486,13 +493,13 @@ impl SsmInstructions for If {
         if !self.if_false.is_empty() {
             instructions.push(SsmInstruction::Label(false_label));
             for s in &self.if_false {
-                instructions.append(&mut s.instructions(env, heap_offset, prefix_gen));
+                instructions.append(&mut s.instructions(env, heap_offset, prefix_gen)?);
             }
         }
 
         instructions.push(SsmInstruction::Label(finished_label));
 
-        instructions
+        Ok(instructions)
     }
 }
 
@@ -502,23 +509,23 @@ impl SsmInstructions for While {
         env: &mut LocationEnv,
         heap_offset: &mut i32,
         prefix_gen: &mut LabelPrefixGenerator,
-    ) -> Vec<SsmInstruction> {
+    ) -> Result<Vec<SsmInstruction>, String> {
         let label = prefix_gen.new_prefix() + "while";
         let label_end = prefix_gen.new_prefix() + "while_end";
 
         let mut instructions = vec![SsmInstruction::Label(label.clone())];
 
-        instructions.append(&mut self.cond.instructions(env, heap_offset, prefix_gen));
+        instructions.append(&mut self.cond.instructions(env, heap_offset, prefix_gen)?);
         instructions.push(SsmInstruction::Brf(label_end.clone()));
 
         for i in &self.body {
-            instructions.append(&mut i.instructions(env, heap_offset, prefix_gen));
+            instructions.append(&mut i.instructions(env, heap_offset, prefix_gen)?);
         }
 
         instructions.push(SsmInstruction::Bra(label));
         instructions.push(SsmInstruction::Label(label_end));
 
-        instructions
+        Ok(instructions)
     }
 }
 
@@ -528,8 +535,8 @@ impl SsmInstructions for Assign {
         env: &mut LocationEnv,
         heap_offset: &mut i32,
         prefix_gen: &mut LabelPrefixGenerator,
-    ) -> Vec<SsmInstruction> {
-        let mut instructions = self.value.instructions(env, heap_offset, prefix_gen);
+    ) -> Result<Vec<SsmInstruction>, String> {
+        let mut instructions = self.value.instructions(env, heap_offset, prefix_gen)?;
 
         if self.target.fields.is_empty() {
             match env.address(self.target.name.clone()) {
@@ -547,7 +554,7 @@ impl SsmInstructions for Assign {
         } else {
             // Fields: load the objects at the appropriate addresses and only update
             // a part of the object.
-            instructions.append(&mut env.load(self.target.name.clone()));
+            instructions.append(&mut env.load(self.target.name.clone())?);
 
             for f in &self.target.fields[..self.target.fields.len() - 1] {
                 instructions.push(SsmInstruction::Lda(LocationEnv::field_offset(f)));
@@ -558,7 +565,7 @@ impl SsmInstructions for Assign {
             }
         }
 
-        instructions
+        Ok(instructions)
     }
 }
 
@@ -568,7 +575,7 @@ impl SsmInstructions for TypedExpr {
         env: &mut LocationEnv,
         heap_offset: &mut i32,
         prefix_gen: &mut LabelPrefixGenerator,
-    ) -> Vec<SsmInstruction> {
+    ) -> Result<Vec<SsmInstruction>, String> {
         self.expr.instructions(env, heap_offset, prefix_gen)
     }
 }
@@ -579,7 +586,7 @@ impl SsmInstructions for Expr {
         env: &mut LocationEnv,
         heap_offset: &mut i32,
         gen: &mut LabelPrefixGenerator,
-    ) -> Vec<SsmInstruction> {
+    ) -> Result<Vec<SsmInstruction>, String> {
         match self {
             Expr::Or(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, SsmInstruction::Or),
             Expr::And(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, SsmInstruction::And),
@@ -612,27 +619,23 @@ impl SsmInstructions for Atom {
         env: &mut LocationEnv,
         heap_offset: &mut i32,
         prefix_gen: &mut LabelPrefixGenerator,
-    ) -> Vec<SsmInstruction> {
+    ) -> Result<Vec<SsmInstruction>, String> {
         match self {
-            Atom::IntLiteral(i) => vec![SsmInstruction::Ldc(truncate_biguint_to_u32(i))],
+            Atom::IntLiteral(i) => Ok(vec![SsmInstruction::Ldc(truncate_biguint_to_u32(i))]),
 
             // False is encoded as 0
             // True as -1 (0xFFFFFFFF).
-            Atom::BoolLiteral(b) => {
-                vec![match b {
-                    true => SsmInstruction::Ldc(0xFFFFFFFF),
-                    false => SsmInstruction::Ldc(0x00),
-                }]
-            }
+            Atom::BoolLiteral(b) => Ok(vec![match b {
+                true => SsmInstruction::Ldc(0xFFFFFFFF),
+                false => SsmInstruction::Ldc(0x00),
+            }]),
 
-            Atom::CharLiteral(c) => {
-                vec![SsmInstruction::Ldc(c.clone().into())]
-            }
+            Atom::CharLiteral(c) => Ok(vec![SsmInstruction::Ldc(c.clone().into())]),
 
             // "abc" => "'a' : 'b' : 'c' : []"
             Atom::StringLiteral(s) => {
                 if s.is_empty() {
-                    return vec![SsmInstruction::Ldc(NULL_PTR)];
+                    return Ok(vec![SsmInstruction::Ldc(NULL_PTR)]);
                 }
 
                 let mut instructions = vec![];
@@ -643,19 +646,19 @@ impl SsmInstructions for Atom {
                 instructions.append(&mut s.chars().map(|_| SsmInstruction::Stmh(2)).collect());
                 *heap_offset = *heap_offset + (2 * s.len() as i32);
 
-                instructions
+                Ok(instructions)
             }
             Atom::FunCall(f) => f.instructions(env, heap_offset, prefix_gen),
             Atom::Variable(v) => v.instructions(env, heap_offset, prefix_gen),
-            Atom::EmptyList => vec![SsmInstruction::Ldc(NULL_PTR)],
+            Atom::EmptyList => Ok(vec![SsmInstruction::Ldc(NULL_PTR)]),
             Atom::Tuple(e1, e2) => {
                 *heap_offset = *heap_offset + 2;
 
-                let mut instructions = e1.instructions(env, heap_offset, prefix_gen);
-                instructions.append(&mut e2.instructions(env, heap_offset, prefix_gen));
+                let mut instructions = e1.instructions(env, heap_offset, prefix_gen)?;
+                instructions.append(&mut e2.instructions(env, heap_offset, prefix_gen)?);
                 instructions.push(SsmInstruction::Stmh(2));
 
-                instructions
+                Ok(instructions)
             }
         }
     }
@@ -667,11 +670,11 @@ impl SsmInstructions for FunCall {
         env: &mut LocationEnv,
         heap_offset: &mut i32,
         prefix_gen: &mut LabelPrefixGenerator,
-    ) -> Vec<SsmInstruction> {
+    ) -> Result<Vec<SsmInstruction>, String> {
         let mut instructions = vec![];
 
         for a in &self.args {
-            instructions.append(&mut a.instructions(env, heap_offset, prefix_gen));
+            instructions.append(&mut a.instructions(env, heap_offset, prefix_gen)?);
         }
 
         if let Some(mut builtin_instructions) = builtin_function(&self, prefix_gen) {
@@ -682,7 +685,7 @@ impl SsmInstructions for FunCall {
             instructions.push(SsmInstruction::Ldr(RR.into()));
         }
 
-        instructions
+        Ok(instructions)
     }
 }
 
@@ -692,13 +695,13 @@ impl SsmInstructions for Variable {
         env: &mut LocationEnv,
         _heap_offset: &mut i32,
         _prefix_gen: &mut LabelPrefixGenerator,
-    ) -> Vec<SsmInstruction> {
-        let mut instructions = env.load(self.name.clone());
+    ) -> Result<Vec<SsmInstruction>, String> {
+        let mut instructions = env.load(self.name.clone())?;
 
         for f in &self.fields {
             instructions.push(SsmInstruction::Lda(LocationEnv::field_offset(f)));
         }
 
-        instructions
+        Ok(instructions)
     }
 }

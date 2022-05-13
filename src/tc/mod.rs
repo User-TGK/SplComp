@@ -3,7 +3,7 @@ mod test;
 
 mod builtin;
 mod return_path_analysis;
-mod tarjan;
+pub mod tarjan;
 
 use builtin::Builtin;
 use return_path_analysis::{ReturnPathAnalysis, Returning};
@@ -222,7 +222,7 @@ trait TypeInference {
     ) -> Result<Subst, String>;
 }
 
-trait TypeInstance {
+pub trait TypeInstance {
     // Determines the free type variables of a type.
     fn ftv(&self) -> HashSet<TypeVar>;
 
@@ -627,10 +627,20 @@ impl TypeInference for FunDecl {
         }
 
         for s in &mut self.statements {
-            subst = s
-                .infer(&context.apply(&subst), &beta.apply(&subst), generator)?
-                .compose(&subst);
-            context = context.apply(&subst);
+            // Btw, this was also red colored on slide 6 of typing lecture 3. This ruins example
+            // examples/disallow_overloading_polymorphic.spl.
+            if let Statement::FunCall(_) = s {
+                let beta_t = Type::Var(generator.new_var());
+                subst = s
+                    .infer(&context.apply(&subst), &beta_t.apply(&subst), generator)?
+                    .compose(&subst);
+                context = context.apply(&subst);
+            } else {
+                subst = s
+                    .infer(&context.apply(&subst), &beta.apply(&subst), generator)?
+                    .compose(&subst);
+                context = context.apply(&subst);
+            }
         }
 
         for v in &mut self.var_decls {
@@ -847,17 +857,6 @@ impl Context {
     }
 }
 
-impl TypeEnv {
-    /// Generalization for builtin functions allowing us to only pass a
-    /// single environment of the context.
-    fn generalize(&self, ty: &Type) -> TypeScheme {
-        TypeScheme::new(
-            ty.ftv().difference(&self.ftv()).cloned().collect(),
-            ty.clone(),
-        )
-    }
-}
-
 impl TypeInference for Program {
     fn infer(
         &mut self,
@@ -973,7 +972,7 @@ pub fn run(program: &mut Program) -> Result<(), String> {
     let builtin = Builtin::default();
 
     // Load builtin functions to the fun context
-    builtin.load(&mut context.functions, &mut generator);
+    builtin.load(&mut context, &mut generator);
 
     let fresh = generator.new_var();
 

@@ -6,13 +6,13 @@ use super::*;
 pub struct Builtin {}
 
 impl Builtin {
-    pub fn load(&self, context: &mut TypeEnv, generator: &mut VarGenerator) {
+    pub fn load(&self, context: &mut Context, generator: &mut VarGenerator) {
         self.load_field_ops(context, generator);
         self.load_print(context, generator);
         self.load_is_empty(context, generator);
     }
 
-    fn load_field_ops(&self, context: &mut TypeEnv, generator: &mut VarGenerator) {
+    fn load_field_ops(&self, context: &mut Context, generator: &mut VarGenerator) {
         let hd_tv = Type::Var(generator.new_var());
         let hd_ty = Type::Function(vec![Type::List(Box::new(hd_tv.clone()))], Box::new(hd_tv));
         let hd_ty_generalized = context.generalize(&hd_ty);
@@ -40,25 +40,37 @@ impl Builtin {
         );
         let snd_ty_generalized = context.generalize(&snd_ty);
 
-        context.insert(Field::Hd.builtin_identifier(), hd_ty_generalized);
-        context.insert(Field::Tl.builtin_identifier(), tk_ty_generalized);
-        context.insert(Field::Fst.builtin_identifier(), fst_ty_generalized);
-        context.insert(Field::Snd.builtin_identifier(), snd_ty_generalized);
+        context
+            .functions
+            .insert(Field::Hd.builtin_identifier(), hd_ty_generalized);
+        context
+            .functions
+            .insert(Field::Tl.builtin_identifier(), tk_ty_generalized);
+        context
+            .functions
+            .insert(Field::Fst.builtin_identifier(), fst_ty_generalized);
+        context
+            .functions
+            .insert(Field::Snd.builtin_identifier(), snd_ty_generalized);
     }
 
-    fn load_print(&self, context: &mut TypeEnv, generator: &mut VarGenerator) {
+    fn load_print(&self, context: &mut Context, generator: &mut VarGenerator) {
         let p_tv = Type::Var(generator.new_var());
         let p_ty = Type::Function(vec![p_tv], Box::new(Type::Void));
         let p_ty_generalized = context.generalize(&p_ty);
 
-        context.insert(String::from("print").into(), p_ty_generalized);
+        context
+            .functions
+            .insert(String::from("print").into(), p_ty_generalized);
     }
 
-    fn load_is_empty(&self, context: &mut TypeEnv, generator: &mut VarGenerator) {
+    fn load_is_empty(&self, context: &mut Context, generator: &mut VarGenerator) {
         let ie_tv = Type::Var(generator.new_var());
         let ie_ty = Type::Function(vec![Type::List(Box::new(ie_tv))], Box::new(Type::Bool));
         let ie_ty_generalized = context.generalize(&ie_ty);
 
-        context.insert(String::from("isEmpty").into(), ie_ty_generalized);
+        context
+            .functions
+            .insert(String::from("isEmpty").into(), ie_ty_generalized);
     }
 }

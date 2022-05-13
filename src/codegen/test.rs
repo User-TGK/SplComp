@@ -26,6 +26,7 @@ fn ssm_code_gen_test_helper_output(input_filename: String, expected_output: &str
 
     let ssm_instructions: Vec<String> = program
         .instructions(&mut code_gen_env, &mut heap_offset, &mut prefix_gen)
+        .unwrap()
         .into_iter()
         .map(|i| i.into())
         .collect();
@@ -76,7 +77,7 @@ fn ssm_code_gen_test_helper(node: impl SsmInstructions, expected: Vec<SsmInstruc
 
     let instructions = node.instructions(&mut env, &mut heap_offset, &mut prefix_gen);
 
-    assert_eq!(instructions, expected);
+    assert_eq!(instructions, Ok(expected));
 }
 
 #[test]

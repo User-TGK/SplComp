@@ -13,9 +13,9 @@ fn print_instructions(t: &Type, prefix_gen: &mut ssm::LabelPrefixGenerator) -> V
             instructions.push(SsmInstruction::Trap(1));
         }
         Type::List(t) => {
-            let label_start = prefix_gen.new_prefix() + "print_list_begin";
+            let list_begin = prefix_gen.new_prefix() + "print_list_begin";
             let last_char = prefix_gen.new_prefix() + "print_list_last";
-            let label_end = prefix_gen.new_prefix() + "print_list_end";
+            let list_end = prefix_gen.new_prefix() + "print_list_end";
 
             instructions.push(SsmInstruction::Str(String::from("R6")));
             instructions.push(SsmInstruction::Link(2));
@@ -25,7 +25,7 @@ fn print_instructions(t: &Type, prefix_gen: &mut ssm::LabelPrefixGenerator) -> V
             instructions.push(SsmInstruction::Ldc('['.into()));
             instructions.push(SsmInstruction::Trap(1));
 
-            instructions.push(SsmInstruction::Label(label_start.clone()));
+            instructions.push(SsmInstruction::Label(list_begin.clone()));
 
             // Store the tail in local var 2
             instructions.push(SsmInstruction::Ldl(1));
@@ -36,7 +36,7 @@ fn print_instructions(t: &Type, prefix_gen: &mut ssm::LabelPrefixGenerator) -> V
             instructions.push(SsmInstruction::Ldl(1));
             instructions.push(SsmInstruction::Ldc(ssm::NULL_PTR));
             instructions.push(SsmInstruction::Eq);
-            instructions.push(SsmInstruction::Brt(label_end.clone()));
+            instructions.push(SsmInstruction::Brt(list_end.clone()));
 
             // Check whether this is the last element
             instructions.push(SsmInstruction::Ldl(2));
@@ -54,14 +54,14 @@ fn print_instructions(t: &Type, prefix_gen: &mut ssm::LabelPrefixGenerator) -> V
             instructions.push(SsmInstruction::Ldl(2));
             instructions.push(SsmInstruction::Stl(1));
 
-            instructions.push(SsmInstruction::Bra(label_start));
+            instructions.push(SsmInstruction::Bra(list_begin));
 
             instructions.push(SsmInstruction::Label(last_char));
             instructions.push(SsmInstruction::Ldl(1));
             instructions.push(SsmInstruction::Lda(-1));
             instructions.append(&mut print_instructions(t, prefix_gen));
 
-            instructions.push(SsmInstruction::Label(label_end));
+            instructions.push(SsmInstruction::Label(list_end));
             instructions.push(SsmInstruction::Ldc(']'.into()));
             instructions.push(SsmInstruction::Trap(1));
 
