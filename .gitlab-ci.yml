@@ -27,7 +27,9 @@ variables:
 # Use cargo to test the project
 test:cargo:
   before_script:
-    - apt install -y curl
+    - apt update -y
+    - apt install -y curl default-jre
+    - java -version
     - curl -LSs https://gitlab.science.ru.nl/compilerconstruction/ssm/builds/artifacts/master/raw/ssm.zip?job=build > ssm.zip
     - unzip ssm.zip
   script:
