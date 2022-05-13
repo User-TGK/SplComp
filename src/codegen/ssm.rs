@@ -674,7 +674,7 @@ impl SsmInstructions for FunCall {
             instructions.append(&mut a.instructions(env, heap_offset, prefix_gen));
         }
 
-        if let Some(mut builtin_instructions) = builtin_function(&self) {
+        if let Some(mut builtin_instructions) = builtin_function(&self, prefix_gen) {
             instructions.append(&mut builtin_instructions);
         } else {
             instructions.push(SsmInstruction::Bsr(self.name.0.clone()));

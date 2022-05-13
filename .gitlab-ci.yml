@@ -26,6 +26,10 @@ variables:
 
 # Use cargo to test the project
 test:cargo:
+  before_script:
+    - apt install -y curl
+    - curl -LSs https://gitlab.science.ru.nl/compilerconstruction/ssm/builds/artifacts/master/raw/ssm.zip?job=build > ssm.zip
+    - unzip ssm.zip
   script:
     - rustc --version && cargo --version  # Print version info for debugging
     - cargo test --workspace --verbose
