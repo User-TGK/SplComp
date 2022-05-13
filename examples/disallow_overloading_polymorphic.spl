@@ -1,0 +1,12 @@
+id_print(a) {
+    print(a);
+
+    return a;
+}
+
+main() {
+    var i = id_print(1);
+    var j = id_print(True);
+
+    return 1;
+}

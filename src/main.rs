@@ -138,6 +138,7 @@ pub fn main() -> Result<(), Error> {
             log::info!("Generating SSM instructions...");
             let ssm_instructions: Vec<String> = program
                 .instructions(&mut code_gen_env, &mut heap_offset, &mut prefix_gen)
+                .map_err(|e| Error::CodeGenError(e))?
                 .into_iter()
                 .map(|i| i.into())
                 .collect();

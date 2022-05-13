@@ -82,7 +82,8 @@ impl Preprocess for Program {
 
         // Add all edges
         for f in &self.fun_decls {
-            let fun_calls = f.statements.function_calls();
+            let mut fun_calls = f.statements.function_calls();
+            fun_calls.append(&mut f.var_decls.function_calls());
 
             for c in fun_calls {
                 if let Some(target_node) = fun_id_index_map.get(&c) {
@@ -139,8 +140,20 @@ trait ContainsVarIdentifier {
     fn variables(&self) -> Vec<Id>;
 }
 
-trait ContainsIdentifier {
+pub trait ContainsIdentifier {
     fn function_calls(&self) -> Vec<Id>;
+}
+
+impl ContainsIdentifier for Vec<VarDecl> {
+    fn function_calls(&self) -> Vec<Id> {
+        let mut res = vec![];
+
+        for v in self {
+            res.append(&mut v.value.expr.function_calls());
+        }
+
+        res
+    }
 }
 
 impl ContainsIdentifier for Vec<Statement> {

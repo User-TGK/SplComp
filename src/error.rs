@@ -18,8 +18,13 @@ pub enum Error {
     #[error("Error during parsing")]
     ParserError(String),
 
+    // An error during semantic analysis.
     #[error("Error during binding time analysis, type checking or return path analysis")]
     SemanticsError(String),
+
+    // An error during code generation.
+    #[error("Error during code generation.")]
+    CodeGenError(String),
 }
 
 impl std::fmt::Debug for Error {
@@ -28,7 +33,9 @@ impl std::fmt::Debug for Error {
             Error::IOError(e) => write!(f, "IO \n\n {:?}", &e),
             Error::RemainingInput(e) => write!(f, "Remaining input \n\n {}", &e),
             Error::LexerError(e) => write!(f, "\n\n {}", &e),
-            Error::ParserError(e) | Error::SemanticsError(e) => write!(f, "\n\n {}", &e),
+            Error::ParserError(e) => write!(f, "\n\n {}", &e),
+            Error::SemanticsError(e) => write!(f, "Semantic analysis \n\n {}", &e),
+            Error::CodeGenError(e) => write!(f, "Code generation \n\n {:?}", &e),
         }
     }
 }
