@@ -10,35 +10,13 @@ macro_rules! bin_expr (
 
 macro_rules! child_expr (
     ($e:expr, $parent_precedence:expr) => (
-        if should_be_paranthesized($e, $parent_precedence) {
+        if $e.should_be_paranthesized($parent_precedence) {
             Box::new(Group::new("(".join(($e.to_pretty()).join(")"))))
         } else {
             $e.to_pretty()
         }
     )
 );
-
-fn precedence(expr: &Expr) -> i32 {
-    match expr {
-        Expr::Or(..) => 2,
-        Expr::And(..) => 3,
-        Expr::Equals(..)
-        | Expr::NotEquals(..)
-        | Expr::Lt(..)
-        | Expr::Le(..)
-        | Expr::Gt(..)
-        | Expr::Ge(..) => 4,
-        Expr::Cons(..) => 5,
-        Expr::Add(..) | Expr::Sub(..) => 6,
-        Expr::Mul(..) | Expr::Div(..) | Expr::Mod(..) => 7,
-        Expr::UnaryMinus(..) | Expr::Not(..) => 8,
-        Expr::Atom(..) => 9,
-    }
-}
-
-fn should_be_paranthesized(expr: &Expr, parent_precedence: i32) -> bool {
-    precedence(expr) < parent_precedence
-}
 
 pub trait PrettyPrintable {
     fn to_pretty(&self) -> Box<dyn Pretty>;
@@ -106,6 +84,10 @@ impl PrettyPrintable for FunDecl {
                         .join(pretty_fun_type(&self.fun_type))
                         .join(Newline)
                         .join("{")
+                        .join(Indent(Sep(0).join(delimited(
+                            &"".join(Sep(1)).join(Sep(1)),
+                            self.var_decls.iter().map(VarDecl::to_pretty),
+                        ))))
                         .join(Indent(Sep(0).join(delimited(
                             &Sep(1),
                             self.statements.iter().map(Statement::to_pretty),
@@ -252,7 +234,7 @@ impl PrettyPrintable for Assign {
 
 impl PrettyPrintable for Expr {
     fn to_pretty(&self) -> Box<dyn Pretty> {
-        let precedence = precedence(self);
+        let precedence = self.precedence();
 
         match self {
             Expr::Or(e1, e2) => bin_expr!(e1, e2, precedence, " || "),

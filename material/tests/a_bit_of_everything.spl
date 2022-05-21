@@ -28,7 +28,7 @@ main ( ) :: -> Void {
     var ok = True;
     while ( n < 20 ) {
         facN = facR ( n );
-        print(facN);
+        //print(facN);
         if ( facN != facI ( n ) || facN != facL ( n )) {
             print ( n : facN : facI ( n ) : facL ( n ) : [] );
             ok = False;

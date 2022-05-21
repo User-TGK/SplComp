@@ -103,8 +103,8 @@ pub struct Assign {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct FunCall {
-    pub(crate) name: Id,
-    pub(crate) args: Vec<TypedExpr>,
+    pub name: Id,
+    pub args: Vec<TypedExpr>,
 }
 
 impl FunCall {
@@ -149,6 +149,30 @@ pub enum Expr {
     Atom(Atom),
 }
 
+impl Expr {
+    pub fn precedence(&self) -> i32 {
+        match self {
+            Expr::Or(..) => 2,
+            Expr::And(..) => 3,
+            Expr::Equals(..)
+            | Expr::NotEquals(..)
+            | Expr::Lt(..)
+            | Expr::Le(..)
+            | Expr::Gt(..)
+            | Expr::Ge(..) => 4,
+            Expr::Cons(..) => 5,
+            Expr::Add(..) | Expr::Sub(..) => 6,
+            Expr::Mul(..) | Expr::Div(..) | Expr::Mod(..) => 7,
+            Expr::UnaryMinus(..) | Expr::Not(..) => 8,
+            Expr::Atom(..) => 9,
+        }
+    }
+
+    pub fn should_be_paranthesized(&self, parent_precedence: i32) -> bool {
+        self.precedence() < parent_precedence
+    }
+}
+
 #[derive(PartialEq, Debug, Clone)]
 pub enum Atom {
     IntLiteral(BigUint),
@@ -163,13 +187,18 @@ pub enum Atom {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Variable {
+    pub(crate) var_type: Option<Type>,
     pub(crate) name: Id,
     pub(crate) fields: Vec<Field>,
 }
 
 impl Variable {
-    pub fn new(name: Id, fields: Vec<Field>) -> Self {
-        Self { name, fields }
+    pub fn new(var_type: Option<Type>, name: Id, fields: Vec<Field>) -> Self {
+        Self {
+            var_type,
+            name,
+            fields,
+        }
     }
 }
 

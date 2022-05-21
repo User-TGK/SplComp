@@ -52,7 +52,7 @@ impl std::str::FromStr for Mode {
             "print" => Ok(Mode::PrettyPrint),
             "type" => Ok(Mode::PrettyPrintTyped),
             "ssm" => Ok(Mode::Ssm),
-            "C" => Ok(Mode::C),
+            "c" => Ok(Mode::C),
             _ => Err(format!("Unknown mode {}", s)),
         }
     }
@@ -67,7 +67,7 @@ impl std::fmt::Display for Mode {
                 Mode::PrettyPrint => "print",
                 Mode::PrettyPrintTyped => "type",
                 Mode::Ssm => "ssm",
-                Mode::C => "C",
+                Mode::C => "c",
             }
         )
     }
@@ -79,6 +79,8 @@ fn print(program: &ast::Program) -> Result<(), Error> {
 
     let mut file = File::create("out.spl")?;
     file.write_all(&to_string(&program.to_pretty(), max_line, tab_size).as_bytes())?;
+
+    log::info!("Finished printing! Printed to 'out.spl'.");
 
     Ok(())
 }
@@ -99,7 +101,7 @@ pub fn main() -> Result<(), Error> {
 
     let tokens = Tokens::new(&tokens, &input);
 
-    // Stage 2: Parse
+    // Stage 2: Parsing
     log::info!("Parsing...");
 
     let parse_result = parser::program_parser(tokens).finish();
@@ -148,15 +150,25 @@ pub fn main() -> Result<(), Error> {
             for instruction in ssm_instructions {
                 write!(file, "{}\n", instruction)?;
             }
+
+            log::info!("Code written to 'out.ssm'.");
         }
-        // Stage 3: (Extension) C CodeGen
+        // Stage 4: (Extension) C CodeGen
         Mode::C => {
             log::info!("Generating C code...");
-            log::warn!("Unimplemented C extension");
+
+            let mut file = File::create("out.c")?;
+
+            let max_line = Some(40);
+            let tab_size = 4;
+
+            file.write_all(&to_string(&program.to_c(false), max_line, tab_size).as_bytes())?;
+            log::info!("Code written to 'out.c'.");
         }
         _ => unreachable!(),
     }
 
     log::info!("Finished compiling!");
+
     Ok(())
 }

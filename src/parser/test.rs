@@ -17,6 +17,7 @@ fn test_field_access() {
     let t1 = Tokens::new(&[], CODE);
 
     let expected1 = Expr::Atom(Atom::Variable(Variable::new(
+        None,
         Id(String::from("x")),
         vec![Field::Hd, Field::Tl, Field::Fst, Field::Snd],
     )));
@@ -392,7 +393,7 @@ fn test_assign_statement_parser() {
     assert_eq!(
         statement,
         Statement::Assign(Assign {
-            target: Variable::new(Id("myVar".to_string()), Vec::new()),
+            target: Variable::new(None, Id("myVar".to_string()), Vec::new()),
             value: Expr::Atom(Atom::IntLiteral(123u32.into())).into(),
         })
     );
@@ -408,6 +409,7 @@ fn test_assign_statement_parser() {
 
     let value = Expr::Not(Box::new(Expr::And(
         Box::new(Expr::Atom(Atom::Variable(Variable::new(
+            None,
             Id("myVar".to_string()),
             Vec::new(),
         )))),
@@ -417,7 +419,7 @@ fn test_assign_statement_parser() {
     assert_eq!(
         statement,
         Statement::Assign(Assign {
-            target: Variable::new(Id("myVar".to_string()), Vec::new()),
+            target: Variable::new(None, Id("myVar".to_string()), Vec::new()),
             value: value.into(),
         })
     );
@@ -434,6 +436,7 @@ fn test_assign_statement_parser() {
         statement,
         Statement::Assign(Assign {
             target: Variable::new(
+                None,
                 Id("myVar".to_string()),
                 vec![Field::Fst, Field::Snd, Field::Tl, Field::Hd]
             ),
@@ -581,10 +584,12 @@ fn test_fun_call_in_return() {
             statements: vec![Statement::Return(Some(
                 Expr::Atom(Atom::FunCall(FunCall::new(
                     Id(String::from("g")),
-                    vec![
-                        Expr::Atom(Atom::Variable(Variable::new(Id(String::from("x")), vec![])))
-                            .into(),
-                    ],
+                    vec![Expr::Atom(Atom::Variable(Variable::new(
+                        None,
+                        Id(String::from("x")),
+                        vec![],
+                    )))
+                    .into()],
                 )))
                 .into(),
             ))],
@@ -611,8 +616,10 @@ fn test_variable_in_return() {
             fun_type: None,
             var_decls: vec![],
             statements: vec![Statement::Return(Some(
-                Expr::Atom(Atom::Variable(Variable::new(Id(String::from("g")), vec![])).into())
-                    .into(),
+                Expr::Atom(
+                    Atom::Variable(Variable::new(None, Id(String::from("g")), vec![])).into(),
+                )
+                .into(),
             ))],
         }],
     };
@@ -797,7 +804,7 @@ fn test_atom_expr_parser() {
 
     let r2 = atom_expr_parser(t1);
     let t2 = Tokens::new(&tokens[2..], "");
-    let var = Variable::new(Id(String::from("x")), Vec::new());
+    let var = Variable::new(None, Id(String::from("x")), Vec::new());
     assert_eq!(r2, Ok((t2, Expr::Atom(Atom::Variable(var)))));
 }
 
@@ -814,6 +821,7 @@ fn test_fun_call_parser() {
         vec![
             Expr::Atom(Atom::IntLiteral(123u32.into())).into(),
             Expr::Atom(Atom::Variable(Variable::new(
+                None,
                 Id(String::from("x")),
                 vec![Field::Hd],
             )))

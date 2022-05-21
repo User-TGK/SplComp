@@ -351,7 +351,7 @@ fn assign_statement_parser(tokens: Tokens) -> IResult<Tokens, Statement, Error> 
             )),
             |((id, fields), _, value, _)| {
                 Statement::Assign(Assign {
-                    target: Variable::new(id, fields),
+                    target: Variable::new(None, id, fields),
                     value: value.into(),
                 })
             },
@@ -555,7 +555,12 @@ fn tuple_parenthesized_expr_parser(tokens: Tokens) -> IResult<Tokens, Expr, Erro
         map(closing_paren_parser, |_| expr.clone()),
         map(
             delimited(comma_parser, expr_parser, closing_paren_parser),
-            |expr2| Expr::Atom(Atom::Tuple(Box::new(expr.clone()), Box::new(expr2))),
+            |expr2| {
+                Expr::Atom(Atom::Tuple(
+                    Box::new(expr.clone().into()),
+                    Box::new(expr2.clone().into()),
+                ))
+            },
         ),
     ))(rest);
 
@@ -577,7 +582,7 @@ fn identifier_parser(tokens: Tokens) -> IResult<Tokens, Id, Error> {
 
 fn variable_atom_parser(tokens: Tokens) -> IResult<Tokens, Atom, Error> {
     map(tuple((identifier_parser, field_parser)), |(id, fields)| {
-        Atom::Variable(Variable::new(id, fields))
+        Atom::Variable(Variable::new(None, id, fields))
     })(tokens)
 }
 

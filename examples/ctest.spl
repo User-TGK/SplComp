@@ -1,0 +1,22 @@
+var t = (1, ('a', (3, 4)));
+
+foo(x) {
+    x.fst.fst = 5;
+}
+
+main () {
+
+    var int_tuple = ((2, 4), 3);
+    var x = t.snd;
+
+    foo(int_tuple);
+
+    //var x = (1, ('a', 'b'));
+    //x.snd = 'b';
+
+    t.snd.snd = (5, 6);
+
+    //print(int_tuple.fst.fst);
+
+    return;
+}
