@@ -73,6 +73,15 @@ pub enum Type {
     Var(Id),
 }
 
+impl Type {
+    pub fn is_composite(&self) -> bool {
+        match self {
+            Type::List(_) | Type::Tuple(_, _) => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub enum Statement {
     If(If),

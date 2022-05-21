@@ -2,7 +2,7 @@ use crate::ast::*;
 
 use super::*;
 
-fn print_instructions(t: &Type, prefix_gen: &mut ssm::LabelPrefixGenerator) -> Vec<SsmInstruction> {
+fn print_instructions(t: &Type, prefix_gen: &mut LabelPrefixGenerator) -> Vec<SsmInstruction> {
     let mut instructions = vec![];
 
     match t {
@@ -34,13 +34,13 @@ fn print_instructions(t: &Type, prefix_gen: &mut ssm::LabelPrefixGenerator) -> V
 
             // Check whether the list is empty
             instructions.push(SsmInstruction::Ldl(1));
-            instructions.push(SsmInstruction::Ldc(ssm::NULL_PTR));
+            instructions.push(SsmInstruction::Ldc(NULL_PTR));
             instructions.push(SsmInstruction::Eq);
             instructions.push(SsmInstruction::Brt(list_end.clone()));
 
             // Check whether this is the last element
             instructions.push(SsmInstruction::Ldl(2));
-            instructions.push(SsmInstruction::Ldc(ssm::NULL_PTR));
+            instructions.push(SsmInstruction::Ldc(NULL_PTR));
             instructions.push(SsmInstruction::Eq);
             instructions.push(SsmInstruction::Brt(last_char.clone()));
 
@@ -105,7 +105,7 @@ fn print_instructions(t: &Type, prefix_gen: &mut ssm::LabelPrefixGenerator) -> V
 
 pub fn builtin_function(
     call: &FunCall,
-    prefix_gen: &mut ssm::LabelPrefixGenerator,
+    prefix_gen: &mut LabelPrefixGenerator,
 ) -> Option<Vec<SsmInstruction>> {
     let mut instructions = vec![];
 
@@ -125,7 +125,7 @@ pub fn builtin_function(
         }
 
         "isEmpty" => {
-            instructions.push(SsmInstruction::Ldc(ssm::NULL_PTR));
+            instructions.push(SsmInstruction::Ldc(NULL_PTR));
             instructions.push(SsmInstruction::Eq);
 
             Some(instructions)

@@ -1,9 +1,5 @@
-pub mod c_code;
+pub mod c;
 pub mod ssm;
 
-mod builtin;
-#[cfg(test)]
-mod test;
-
-pub use c_code::ToC;
+pub use c::ToC;
 pub use ssm::{SsmInstruction, SsmInstructions};

@@ -1,7 +1,12 @@
+mod builtin;
+
+#[cfg(test)]
+mod test;
+
 use crate::ast::*;
 use crate::tc::{tarjan::ContainsIdentifier, TypeInstance};
 
-use super::builtin::*;
+use builtin::*;
 
 use num_bigint::BigUint;
 use num_traits::cast::ToPrimitive;

@@ -1,7 +1,7 @@
 use spl_compiler::ast;
 use spl_compiler::ast::pp::PrettyPrintable;
-use spl_compiler::codegen::ssm;
-use spl_compiler::codegen::*;
+use spl_compiler::codegen;
+use spl_compiler::codegen::{SsmInstructions, ToC};
 use spl_compiler::error::*;
 use spl_compiler::parser;
 use spl_compiler::parser::{Scanner, Token, Tokens};
@@ -133,9 +133,9 @@ pub fn main() -> Result<(), Error> {
 
         // Stage 4: SSM CodeGen
         Mode::Ssm => {
-            let mut code_gen_env = ssm::LocationEnv::default();
+            let mut code_gen_env = codegen::ssm::LocationEnv::default();
             let mut heap_offset = 0;
-            let mut prefix_gen = ssm::LabelPrefixGenerator::default();
+            let mut prefix_gen = codegen::ssm::LabelPrefixGenerator::default();
 
             log::info!("Generating SSM instructions...");
             let ssm_instructions: Vec<String> = program
@@ -162,7 +162,9 @@ pub fn main() -> Result<(), Error> {
             let max_line = Some(40);
             let tab_size = 4;
 
-            file.write_all(&to_string(&program.to_c(false), max_line, tab_size).as_bytes())?;
+            let mut env = codegen::c::CEnv::default();
+
+            file.write_all(&to_string(&program.to_c(&mut env), max_line, tab_size).as_bytes())?;
             log::info!("Code written to 'out.c'.");
         }
         _ => unreachable!(),
