@@ -114,11 +114,16 @@ pub struct Assign {
 pub struct FunCall {
     pub name: Id,
     pub args: Vec<TypedExpr>,
+    pub fun_type: Option<Type>,
 }
 
 impl FunCall {
     pub fn new(name: Id, args: Vec<TypedExpr>) -> Self {
-        Self { name, args }
+        Self {
+            name,
+            args,
+            fun_type: None,
+        }
     }
 }
 

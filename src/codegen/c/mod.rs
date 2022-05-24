@@ -8,6 +8,7 @@ use indoc::indoc;
 use pretty_trait::{block, delimited, Group, Indent, JoinExt, Newline, Pretty, Sep};
 
 use std::collections::HashMap;
+use std::ops::Deref;
 
 macro_rules! bin_expr (
     ($e1:expr, $e2:expr, $env:expr, $parent_precedence:expr, $op:expr) => (
@@ -166,6 +167,8 @@ impl ToC for Program {
 
             typedef enum {Int, Char, Bool, Tuple, List} Type;
 
+            // Print function that prints a value based on its type.
+            // Returns a pointer to the types list remainder (which still needs to be printed)
             struct node* print(intptr_t value, struct node* types) {
                 struct node* current_type = types;
                 
@@ -352,9 +355,7 @@ impl ToC for Type {
             Type::Void => Box::new("void"),
             Type::Tuple(_, _) => Box::new("struct tuple*"),
             Type::List(_) => Box::new("struct node*"),
-            // maybe intptr as well
-            Type::Var(_id) => Box::new("void*"),
-
+            Type::Var(_) => Box::new("intptr_t"),
             Type::Function(_, _) => {
                 unreachable!()
             }
@@ -533,15 +534,49 @@ impl ToC for Atom {
 
 impl ToC for FunCall {
     fn to_c(&self, env: &mut CEnv) -> Box<dyn Pretty> {
-        Box::new(Group::new(
-            self.name.0.to_string().join("(").join(
-                block(delimited(
-                    &",".join(Sep(1)),
-                    self.args.iter().map(|e| e.expr.to_c(env)),
-                ))
-                .join(")"),
-            ),
-        ))
+        if let Some(Type::Function(at, rt)) = &self.fun_type {
+            let pref = if let Type::Var(rtv) = rt.deref() {
+                if let Some(i) = at.iter().position(|t| {
+                    if let Type::Var(rtv2) = t {
+                        rtv == rtv2
+                    } else {
+                        false
+                    }
+                }) {
+                    match self.args[i].expr_type.as_ref().unwrap() {
+                        Type::Int => "(int)",
+                        Type::Char => "(char)",
+                        Type::Bool => "(bool)",
+                        Type::Tuple(_, _) => "(struct tuple*)",
+                        Type::List(_) => "(struct node*)",
+                        _ => "",
+                    }
+                } else {
+                    ""
+                }
+            } else {
+                ""
+            };
+
+            Box::new(Group::new(
+                pref.join(self.name.0.to_string()).join("(").join(
+                    block(delimited(
+                        &",".join(Sep(1)),
+                        at.iter().zip(self.args.iter()).map(|(t, e)| {
+                            println!("t: {:?}, e: {:?} e", t, e);
+                            if let Type::Var(_) = t {
+                                "(intptr_t)".join(e.expr.to_c(env))
+                            } else {
+                                "".join(e.expr.to_c(env))
+                            }
+                        }),
+                    ))
+                    .join(")"),
+                ),
+            ))
+        } else {
+            unreachable!()
+        }
     }
 }
 

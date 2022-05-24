@@ -592,7 +592,10 @@ impl TypeInference for FunCall {
                 }
 
                 let fun_type = Type::Function(arg_types, Box::new(expected.clone())).apply(&sub);
-                let final_s = ts.instantiate(generator).apply(&sub).mgu(&fun_type)?;
+                let gen_type = ts.instantiate(generator);
+                let final_s = gen_type.apply(&sub).mgu(&fun_type)?;
+
+                self.fun_type = Some(gen_type);
 
                 Ok(sub.compose(&final_s))
             }
