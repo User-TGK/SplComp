@@ -4,41 +4,51 @@ use super::*;
 
 use pretty_trait::{JoinExt, Newline, Pretty};
 
-fn print_type_list(t: &Type, tail: String) -> String {
+fn print_type_list(t: &Type, tail: String) -> Result<String, String> {
     match t {
-        Type::Int => format!("list_node_new(Int, {})", tail),
-        Type::Char => format!("list_node_new(Char, {})", tail),
-        Type::Bool => format!("list_node_new(Bool, {})", tail),
-        Type::List(t1) => format!("list_node_new(List, {})", print_type_list(t1, tail)),
+        Type::Int => Ok(format!("list_node_new(Int, {})", tail)),
+        Type::Char => Ok(format!("list_node_new(Char, {})", tail)),
+        Type::Bool => Ok(format!("list_node_new(Bool, {})", tail)),
+        Type::List(t1) => Ok(format!(
+            "list_node_new(List, {})",
+            print_type_list(t1, tail)?
+        )),
         Type::Tuple(t1, t2) => {
-            let tail_t1 = print_type_list(t2, String::from(tail));
+            let tail_t1 = print_type_list(t2, String::from(tail))?;
 
-            format!("list_node_new(Tuple, {})", print_type_list(t1, tail_t1))
+            Ok(format!(
+                "list_node_new(Tuple, {})",
+                print_type_list(t1, tail_t1)?
+            ))
         }
+        Type::Var(v) => Err(format!(
+            "Illegal call to 'print' with generic type '{}'",
+            v.0
+        )),
         _ => unreachable!(),
     }
 }
 
-pub fn builtin_function(call: &FunCall, env: &mut CEnv) -> Option<Box<dyn Pretty>> {
+pub fn builtin_function(call: &FunCall, env: &mut CEnv) -> Result<Option<Box<dyn Pretty>>, String> {
     match call.name.0.as_str() {
         "print" => {
             if call.args.len() == 1 {
                 let t = call.args[0].expr_type.as_ref().unwrap();
-                let types = print_type_list(t, String::from("NULL"));
+                let types = print_type_list(t, String::from("NULL"))?;
 
-                Some(Box::new(
+                Ok(Some(Box::new(
                     "print((intptr_t) "
-                        .join(call.args[0].expr.to_c(env))
+                        .join(call.args[0].expr.to_c(env)?)
                         .join(", ")
                         .join(types)
                         .join(");")
                         .join(Newline)
                         .join("printf(\"\\n\");"),
-                ))
+                )))
             } else {
-                None
+                Ok(None)
             }
         }
-        _ => None,
+        _ => Ok(None),
     }
 }

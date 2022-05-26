@@ -164,7 +164,14 @@ pub fn main() -> Result<(), Error> {
 
             let mut env = codegen::c::CEnv::default();
 
-            file.write_all(&to_string(&program.to_c(&mut env), max_line, tab_size).as_bytes())?;
+            file.write_all(
+                &to_string(
+                    &program.to_c(&mut env).map_err(|e| Error::CodeGenError(e))?,
+                    max_line,
+                    tab_size,
+                )
+                .as_bytes(),
+            )?;
             log::info!("Code written to 'out.c'.");
         }
         _ => unreachable!(),

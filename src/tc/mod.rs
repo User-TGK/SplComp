@@ -579,16 +579,15 @@ impl TypeInference for FunCall {
 
                 for a in &mut self.args {
                     let fresh = generator.new_var();
-
                     let s = a.infer(&context.apply(&sub), &fresh.clone().into(), generator)?;
 
+                    sub = sub.compose(&s);
+
                     if let Some(t) = s.get(&fresh) {
-                        arg_types.push(t.clone() /*.apply(&s)*/);
+                        arg_types.push(t.clone().apply(&sub));
                     } else {
                         arg_types.push(fresh.clone().into());
                     }
-
-                    sub = sub.compose(&s);
                 }
 
                 let fun_type = Type::Function(arg_types, Box::new(expected.clone())).apply(&sub);
@@ -738,7 +737,17 @@ impl TypeInference for TypedExpr {
     ) -> Result<Subst, String> {
         let s = self.expr.infer(context, expected, generator)?;
 
-        self.expr_type = Some(expected.apply(&s));
+        if let Type::Var(v) = expected {
+            if let Some(t) = s.get(v) {
+                // This was needed to do things as `print(bool_list.tl)`, the type var
+                // would not be substituted otherwise.
+                self.expr_type = Some(t.apply(&s));
+            } else {
+                self.expr_type = Some(expected.apply(&s));
+            }
+        } else {
+            self.expr_type = Some(expected.apply(&s));
+        }
 
         Ok(s)
     }

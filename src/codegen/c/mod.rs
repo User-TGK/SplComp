@@ -5,43 +5,34 @@ use crate::ast::*;
 use builtin::*;
 
 use indoc::indoc;
-use pretty_trait::{block, delimited, Group, Indent, JoinExt, Newline, Pretty, Sep};
+use pretty_trait::{block, delimited, Group, Indent, Join, JoinExt, Newline, Pretty, Sep};
 
-use std::collections::HashMap;
 use std::ops::Deref;
 
 macro_rules! bin_expr (
     ($e1:expr, $e2:expr, $env:expr, $parent_precedence:expr, $op:expr) => (
-        Box::new(child_expr!($e1, $parent_precedence, $env).join($op).join(child_expr!($e2, $parent_precedence, $env)))
+        Ok(Box::new(child_expr!($e1, $parent_precedence, $env)
+                    .join($op).join(child_expr!($e2, $parent_precedence, $env))))
     )
 );
 
 macro_rules! child_expr (
     ($e:expr, $parent_precedence:expr, $env:expr) => (
         if $e.should_be_paranthesized($parent_precedence) {
-            Box::new(Group::new("(".join(($e.to_c($env)).join(")"))))
+            Box::new("(".join($e.to_c($env)?).join(")"))
         } else {
-            $e.to_c($env)
+            Box::new("".join($e.to_c($env)?).join(""))
         }
     )
 );
 
-#[derive(Default)]
-pub struct CompositeTypeEnv(HashMap<Type, String>);
-
-#[derive(Default)]
-pub struct TypePrefixGenerator {
-    counter: usize,
-}
-
-impl TypePrefixGenerator {
-    pub fn new_prefix(&mut self) -> String {
-        let var = format!("T_{}_", self.counter);
-        self.counter += 1;
-
-        var
-    }
-}
+macro_rules! error_iter(
+    ($vec:expr, $env:expr) => (
+        $vec
+            .map(|item| item.to_c($env))
+            .collect::<Result<Vec<Box<dyn Pretty>>, String>>()?
+    )
+);
 
 #[derive(Clone, Debug)]
 pub struct CEnv {
@@ -78,22 +69,41 @@ impl Default for CEnv {
 }
 
 pub trait ToC {
-    fn to_c(&self, env: &mut CEnv) -> Box<dyn Pretty>;
+    fn to_c(&self, env: &mut CEnv) -> Result<Box<dyn Pretty>, String>;
 }
 
-fn global_var_decls(var_decls: &Vec<VarDecl>, env: &mut CEnv) -> Box<dyn Pretty> {
-    Box::new(
+// Instance for global variable declarations without initialization.
+impl ToC for (&Type, &String) {
+    fn to_c(&self, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
+        Ok(Box::new(
+            self.0.to_c(env)?.join(" ").join(self.1.clone()).join(";"),
+        ))
+    }
+}
+
+// Instance for initializing (assigning to) a global variable in the initialization function.
+impl ToC for (&Id, &TypedExpr) {
+    fn to_c(&self, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
+        Ok(Box::new(
+            self.0
+                .to_c(env)?
+                .join(" = ")
+                .join(self.1.expr.to_c(env)?)
+                .join(";"),
+        ))
+    }
+}
+
+fn global_var_decls(var_decls: &Vec<VarDecl>, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
+    Ok(Box::new(
         delimited(
-            &"".join(Sep(1)).join(Sep(1)),
-            var_decls.iter().map(|v| {
-                v.var_type
-                    .as_ref()
-                    .unwrap()
-                    .to_c(env)
-                    .join(" ")
-                    .join(v.name.to_c(env))
-                    .join(";")
-            }),
+            &"".join(Sep(1)),
+            error_iter!(
+                var_decls
+                    .iter()
+                    .map(|v| (v.var_type.as_ref().unwrap(), &v.name.0)),
+                env
+            ),
         )
         .join(Newline)
         .join(Newline)
@@ -101,23 +111,17 @@ fn global_var_decls(var_decls: &Vec<VarDecl>, env: &mut CEnv) -> Box<dyn Pretty>
         .join(Newline)
         .join("void initialize() {")
         .join(Indent(Sep(0).join(delimited(
-            &"".join(Sep(1)).join(Sep(1)),
-            var_decls.iter().map(|v| {
-                v.name
-                    .to_c(env)
-                    .join(" = ")
-                    .join(v.value.expr.to_c(env))
-                    .join(";")
-            }),
+            &"".join(Sep(1)),
+            error_iter!(var_decls.iter().map(|v| (&v.name, &v.value)), env),
         ))))
         .join(Newline)
         .join("}")
         .join(Newline),
-    )
+    ))
 }
 
 impl ToC for Program {
-    fn to_c(&self, env: &mut CEnv) -> Box<dyn Pretty> {
+    fn to_c(&self, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
         let prelude = indoc! {"
             #include <assert.h>
             #include <stdint.h>
@@ -219,65 +223,70 @@ impl ToC for Program {
 
         if self.var_decls.is_empty() {
             let mut new_env = env.clone().with_initialize(false);
-            Box::new(prelude.join(delimited(
-                &"".join(Sep(1)).join(Sep(1)),
-                self.fun_decls.iter().map(|f| f.to_c(&mut new_env)),
-            )))
+            let fun_decls: Result<Vec<Box<dyn Pretty>>, String> = self
+                .fun_decls
+                .iter()
+                .map(|f| f.to_c(&mut new_env))
+                .collect();
+            let fun_decls = fun_decls?;
+
+            Ok(Box::new(
+                prelude.join(delimited(&"".join(Sep(1)).join(Sep(1)), fun_decls)),
+            ))
         } else {
-            Box::new(
+            Ok(Box::new(
                 prelude.join("// Global variables").join(Newline).join(
-                    global_var_decls(&self.var_decls, env)
+                    global_var_decls(&self.var_decls, env)?
                         .join(Newline)
                         .join("// Function declarations")
                         .join(Newline)
                         .join(delimited(
                             &"".join(Sep(1)).join(Sep(1)),
-                            self.fun_decls.iter().map(|f| f.to_c(env)),
+                            error_iter!(self.fun_decls.iter(), env),
                         )),
                 ),
-            )
+            ))
         }
     }
 }
 
 impl ToC for VarDecl {
-    fn to_c(&self, env: &mut CEnv) -> Box<dyn Pretty> {
-        Box::new(
+    fn to_c(&self, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
+        Ok(Box::new(
             self.var_type
                 .as_ref()
                 .unwrap()
-                .to_c(env)
+                .to_c(env)?
                 .join(" ")
-                .join(self.name.to_c(env))
+                .join(self.name.to_c(env)?)
                 .join(" = ")
-                .join(self.value.expr.to_c(env))
+                .join(self.value.expr.to_c(env)?)
                 .join(";"),
-        )
+        ))
     }
 }
 
 impl ToC for (&Type, &Id) {
-    fn to_c(&self, env: &mut CEnv) -> Box<dyn Pretty> {
-        Box::new(self.0.to_c(env).join(" ").join(self.1.to_c(env)))
+    fn to_c(&self, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
+        Ok(Box::new(
+            self.0.to_c(env)?.join(" ").join(self.1.to_c(env)?),
+        ))
     }
 }
 
 impl ToC for FunDecl {
-    fn to_c(&self, env: &mut CEnv) -> Box<dyn Pretty> {
+    fn to_c(&self, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
         if let Some(t) = &self.fun_type {
             if let Type::Function(arg_types, rt) = t {
                 if self.var_decls.is_empty() {
-                    return Box::new(
-                        rt.to_c(env)
+                    return Ok(Box::new(
+                        rt.to_c(env)?
                             .join(" ")
-                            .join(self.name.to_c(env))
+                            .join(self.name.to_c(env)?)
                             .join("(")
                             .join(delimited(
                                 &", ",
-                                arg_types
-                                    .iter()
-                                    .zip(self.params.iter())
-                                    .map(|p| p.to_c(env)),
+                                error_iter!(arg_types.iter().zip(self.params.iter()), env),
                             ))
                             .join(")")
                             .join(Newline)
@@ -289,23 +298,20 @@ impl ToC for FunDecl {
                             })
                             .join(Indent(Sep(0).join(delimited(
                                 &Sep(1),
-                                self.statements.iter().map(|s| s.to_c(env)),
+                                error_iter!(self.statements.iter(), env),
                             ))))
                             .join(Newline)
                             .join("}"),
-                    );
+                    ));
                 } else {
-                    return Box::new(
-                        rt.to_c(env)
+                    return Ok(Box::new(
+                        rt.to_c(env)?
                             .join(" ")
-                            .join(self.name.to_c(env))
+                            .join(self.name.to_c(env)?)
                             .join("(")
                             .join(delimited(
                                 &", ",
-                                arg_types
-                                    .iter()
-                                    .zip(self.params.iter())
-                                    .map(|p| p.to_c(env)),
+                                error_iter!(arg_types.iter().zip(self.params.iter()), env),
                             ))
                             .join(")")
                             .join(Newline)
@@ -319,17 +325,17 @@ impl ToC for FunDecl {
                                     })
                                     .join(delimited(
                                         &Sep(1),
-                                        self.var_decls.iter().map(|v| v.to_c(env)),
+                                        error_iter!(self.var_decls.iter(), env),
                                     )),
                             ))
                             .join(Newline)
                             .join(Indent(Sep(0).join(delimited(
                                 &Sep(1),
-                                self.statements.iter().map(|s| s.to_c(env)),
+                                error_iter!(self.statements.iter(), env),
                             ))))
                             .join(Newline)
                             .join("}"),
-                    );
+                    ));
                 }
             }
 
@@ -341,14 +347,14 @@ impl ToC for FunDecl {
 }
 
 impl ToC for Id {
-    fn to_c(&self, _env: &mut CEnv) -> Box<dyn Pretty> {
-        Box::new(self.0.to_string())
+    fn to_c(&self, _env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
+        Ok(Box::new(self.0.to_string()))
     }
 }
 
 impl ToC for Type {
-    fn to_c(&self, _env: &mut CEnv) -> Box<dyn Pretty> {
-        match self {
+    fn to_c(&self, _env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
+        Ok(match self {
             Type::Int => Box::new("int"),
             Type::Bool => Box::new("bool"),
             Type::Char => Box::new("char"),
@@ -359,106 +365,106 @@ impl ToC for Type {
             Type::Function(_, _) => {
                 unreachable!()
             }
-        }
+        })
     }
 }
 
 impl ToC for Statement {
-    fn to_c(&self, env: &mut CEnv) -> Box<dyn Pretty> {
+    fn to_c(&self, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
         match self {
             Statement::If(i) => i.to_c(env),
             Statement::While(w) => w.to_c(env),
             Statement::Assign(a) => a.to_c(env),
             Statement::FunCall(f) => {
-                if let Some(builtin_fun) = builtin_function(f, env) {
-                    builtin_fun
+                if let Some(builtin_fun) = builtin_function(f, env)? {
+                    Ok(builtin_fun)
                 } else {
-                    Box::new(f.to_c(env).join(";"))
+                    Ok(Box::new(f.to_c(env)?.join(";")))
                 }
             }
             Statement::Return(e) => match e {
-                Some(e) => Box::new("return ".join(e.expr.to_c(env)).join(";")),
+                Some(e) => Ok(Box::new("return ".join(e.expr.to_c(env)?).join(";"))),
 
                 // This is only useful for "early returns"
-                None => Box::new("return;"),
+                None => Ok(Box::new("return;")),
             },
         }
     }
 }
 
-fn to_c_else_case(false_body: &Vec<Statement>, env: &mut CEnv) -> Box<dyn Pretty> {
+fn to_c_else_case(false_body: &Vec<Statement>, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
     if false_body.is_empty() {
-        Box::new("".join(""))
+        Ok(Box::new("".join("")))
     } else {
-        Box::new(
+        Ok(Box::new(
             "".join(Sep(1))
                 .join("else {")
                 .join(block(delimited(
                     &"".join(Sep(1)),
-                    false_body.iter().map(|s| s.to_c(env)),
+                    error_iter!(false_body.iter(), env),
                 )))
                 .join("}"),
-        )
+        ))
     }
 }
 
 impl ToC for If {
-    fn to_c(&self, env: &mut CEnv) -> Box<dyn Pretty> {
-        Box::new(
-            "if (".join(self.cond.expr.to_c(env)).join(") {").join(
+    fn to_c(&self, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
+        Ok(Box::new(
+            "if (".join(self.cond.expr.to_c(env)?).join(") {").join(
                 block(delimited(
                     &"".join(Sep(1)),
-                    self.if_true.iter().map(|s| s.to_c(env)),
+                    error_iter!(self.if_true.iter(), env),
                 ))
                 .join("}")
-                .join(to_c_else_case(&self.if_false, env)),
+                .join(to_c_else_case(&self.if_false, env)?),
             ),
-        )
+        ))
     }
 }
 
 impl ToC for While {
-    fn to_c(&self, env: &mut CEnv) -> Box<dyn Pretty> {
-        Box::new(
+    fn to_c(&self, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
+        Ok(Box::new(
             "while (".join(
                 self.cond
                     .expr
-                    .to_c(env)
+                    .to_c(env)?
                     .join(") {")
                     .join(block(delimited(
                         &"".join(Sep(1)),
-                        self.body.iter().map(|p| p.to_c(env)),
+                        error_iter!(self.body.iter(), env),
                     )))
                     .join("}"),
             ),
-        )
+        ))
     }
 }
 
 impl ToC for Assign {
-    fn to_c(&self, env: &mut CEnv) -> Box<dyn Pretty> {
+    fn to_c(&self, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
         let lhs = if self.target.fields.is_empty() {
-            self.target.to_c(env)
+            self.target.to_c(env)?
         } else {
-            variable_field_access(&self.target, false)
+            variable_field_access(&self.target, false)?
         };
 
-        Box::new(
+        Ok(Box::new(
             lhs.join(" = ")
                 .join(
                     self.value.expr.to_c(
                         &mut env
                             .clone()
                             .with_cast_to_intptr(!self.target.fields.is_empty()),
-                    ),
+                    )?,
                 )
                 .join(";"),
-        )
+        ))
     }
 }
 
 impl ToC for Expr {
-    fn to_c(&self, env: &mut CEnv) -> Box<dyn Pretty> {
+    fn to_c(&self, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
         let precedence = self.precedence();
 
         match self {
@@ -481,24 +487,28 @@ impl ToC for Expr {
                 } else {
                     "list_node_new((intptr_t)"
                 };
-                Box::new(
+                Ok(Box::new(
                     prefix
-                        .join(e1.to_c(env))
+                        .join(e1.to_c(env)?)
                         .join(",")
-                        .join(e2.to_c(&mut env.clone().with_cast_to_intptr(false)))
+                        .join(e2.to_c(&mut env.clone().with_cast_to_intptr(false))?)
                         .join(")"),
-                )
+                ))
             }
-            Expr::UnaryMinus(e) => Box::new(Group::new("-".join(child_expr!(e, precedence, env)))),
-            Expr::Not(e) => Box::new(Group::new("!".join(child_expr!(e, precedence, env)))),
+            Expr::UnaryMinus(e) => Ok(Box::new(Group::new(
+                "-".join(child_expr!(e, precedence, env)),
+            ))),
+            Expr::Not(e) => Ok(Box::new(Group::new(
+                "!".join(child_expr!(e, precedence, env)),
+            ))),
             Expr::Atom(a) => a.to_c(env),
         }
     }
 }
 
 impl ToC for Atom {
-    fn to_c(&self, env: &mut CEnv) -> Box<dyn Pretty> {
-        match self {
+    fn to_c(&self, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
+        Ok(match self {
             Atom::IntLiteral(i) => Box::new(i.to_str_radix(10)),
             Atom::BoolLiteral(b) => Box::new(match b {
                 true => String::from("1"),
@@ -509,8 +519,8 @@ impl ToC for Atom {
                 let escaped = string.replace("\\", "\\\\").replace("\"", "\\\"");
                 Box::new(format!("\"{}\"", escaped))
             }
-            Atom::FunCall(f) => f.to_c(env),
-            Atom::Variable(v) => v.to_c(env),
+            Atom::FunCall(f) => f.to_c(env)?,
+            Atom::Variable(v) => v.to_c(env)?,
             Atom::EmptyList => Box::new(String::from("NULL")),
             Atom::Tuple(e1, e2) => {
                 let prefix = if env.cast_to_intptr {
@@ -522,18 +532,18 @@ impl ToC for Atom {
 
                 Box::new(
                     prefix
-                        .join(e1.to_c(&mut new_env))
+                        .join(e1.to_c(&mut new_env)?)
                         .join(", ")
-                        .join(e2.to_c(&mut new_env))
+                        .join(e2.to_c(&mut new_env)?)
                         .join(")"),
                 )
             }
-        }
+        })
     }
 }
 
 impl ToC for FunCall {
-    fn to_c(&self, env: &mut CEnv) -> Box<dyn Pretty> {
+    fn to_c(&self, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
         if let Some(Type::Function(at, rt)) = &self.fun_type {
             let pref = if let Type::Var(rtv) = rt.deref() {
                 if let Some(i) = at.iter().position(|t| {
@@ -558,29 +568,39 @@ impl ToC for FunCall {
                 ""
             };
 
-            Box::new(Group::new(
-                pref.join(self.name.0.to_string()).join("(").join(
+            let annotated_args: Vec<Join<&str, Box<dyn Pretty>>> = at
+                .iter()
+                .zip(error_iter!(self.args.iter().map(|e| &e.expr), env))
+                .map(|(t, e)| {
+                    let pre = match t {
+                        Type::Var(_) => "(intptr_t)",
+                        _ => "",
+                    };
+
+                    pre.join(e)
+                })
+                .collect();
+
+            Ok(Box::new(Group::new(
+                pref.join(self.name.0.to_string())
+                    .join("(")
+                    .join(block(delimited(&",".join(Sep(1)), annotated_args)).join(")")),
+            )))
+        } else {
+            Ok(Box::new(Group::new(
+                self.name.0.to_string().join("(").join(
                     block(delimited(
                         &",".join(Sep(1)),
-                        at.iter().zip(self.args.iter()).map(|(t, e)| {
-                            println!("t: {:?}, e: {:?} e", t, e);
-                            if let Type::Var(_) = t {
-                                "(intptr_t)".join(e.expr.to_c(env))
-                            } else {
-                                "".join(e.expr.to_c(env))
-                            }
-                        }),
+                        error_iter!(self.args.iter().map(|a| &a.expr), env),
                     ))
                     .join(")"),
                 ),
-            ))
-        } else {
-            unreachable!()
+            )))
         }
     }
 }
 
-fn variable_field_access(v: &Variable, with_lhs_cast: bool) -> Box<dyn Pretty> {
+fn variable_field_access(v: &Variable, with_lhs_cast: bool) -> Result<Box<dyn Pretty>, String> {
     let mut acc = v.name.0.to_string();
     let mut t = v.var_type.as_ref().unwrap();
 
@@ -637,19 +657,24 @@ fn variable_field_access(v: &Variable, with_lhs_cast: bool) -> Box<dyn Pretty> {
                     acc = "(int) ".to_string() + acc.as_str();
                 }
             }
+            Type::Bool => {
+                if with_lhs_cast {
+                    acc = "(bool) ".to_string() + acc.as_str();
+                }
+            }
             Type::Tuple(_, _) => {
                 acc = "to_tuple_ptr(".to_string() + acc.as_str() + ")";
             }
-            _ => {} //_ => unimplemented!("{:?} // {}", t, acc),
+            _ => {}
         }
     }
-    Box::new(acc)
+    Ok(Box::new(acc))
 }
 
 impl ToC for Variable {
-    fn to_c(&self, _env: &mut CEnv) -> Box<dyn Pretty> {
+    fn to_c(&self, _env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
         if self.fields.is_empty() {
-            Box::new(self.name.0.to_string())
+            Ok(Box::new(self.name.0.to_string()))
         } else {
             variable_field_access(&self, true)
         }
