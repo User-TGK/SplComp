@@ -165,6 +165,10 @@ impl ToC for Program {
                 return (struct tuple*) ptr;
             }
 
+            struct node* to_list_ptr(intptr_t ptr) {
+                return (struct node*) ptr;
+            }
+
             bool isEmpty(struct node* list) {
                 return list == NULL;
             }
@@ -516,8 +520,16 @@ impl ToC for Atom {
             }),
             Atom::CharLiteral(c) => Box::new(format!("'{}'", c.to_string())),
             Atom::StringLiteral(string) => {
-                let escaped = string.replace("\\", "\\\\").replace("\"", "\\\"");
-                Box::new(format!("\"{}\"", escaped))
+                let mut list_expr = Expr::Atom(Atom::EmptyList);
+
+                for c in string.chars().rev() {
+                    list_expr = Expr::Cons(
+                        Box::new(Expr::Atom(Atom::CharLiteral(c))),
+                        Box::new(list_expr),
+                    );
+                }
+
+                list_expr.to_c(env)?
             }
             Atom::FunCall(f) => f.to_c(env)?,
             Atom::Variable(v) => v.to_c(env)?,
@@ -606,7 +618,11 @@ fn variable_field_access(v: &Variable, with_lhs_cast: bool) -> Result<Box<dyn Pr
 
     let mut field_it = v.fields.iter().peekable();
 
+    // Only cast if we didn't get a list by tail (because we already were a list).
+    let mut list_cast;
+
     while let Some(field) = field_it.next() {
+        list_cast = true;
         match field {
             Field::Fst => {
                 if let Type::Tuple(t1, _) = &t {
@@ -635,6 +651,7 @@ fn variable_field_access(v: &Variable, with_lhs_cast: bool) -> Result<Box<dyn Pr
             }
 
             Field::Tl => {
+                list_cast = false;
                 acc = acc + "->tail";
             }
         }
@@ -664,6 +681,11 @@ fn variable_field_access(v: &Variable, with_lhs_cast: bool) -> Result<Box<dyn Pr
             }
             Type::Tuple(_, _) => {
                 acc = "to_tuple_ptr(".to_string() + acc.as_str() + ")";
+            }
+            Type::List(_) => {
+                if list_cast {
+                    acc = "to_list_ptr(".to_string() + acc.as_str() + ")";
+                }
             }
             _ => {}
         }

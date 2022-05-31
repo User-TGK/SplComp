@@ -1,4 +1,39 @@
-var t = (1, ('a', (3, 4)));
+//Int a = 1;
+//Int b = 2;
+//
+//id(x) {
+//    return x;
+//}
+
+main () {
+    var bool_list = True : False : True : [];
+    var bool_list_tl = bool_list.tl;
+
+    //var x = (1,2);
+    //x = id(x);
+
+    //print(x);
+    print(bool_list.tl);
+}
+
+
+// TEST FOR LISTS AND COMPLEX
+//main() {
+//    var l1 = 1 : [];
+//    var l2 = 2 : [];
+//
+//    //var list = "list";
+//
+//    var x = ((1, 2), (4, 5));
+//    var y = l1 : l2 : [];
+//
+//    var complex_nested_construct = (x, y);
+//    print(complex_nested_construct);
+//}
+
+
+// TEST FOR TUPLES
+/*var t = (1, ('a', (3, 4)));
 
 foo(x) {
     x.fst.fst = 5;
@@ -10,13 +45,7 @@ main () {
     var x = t.snd;
 
     foo(int_tuple);
-
-    //var x = (1, ('a', 'b'));
-    //x.snd = 'b';
-
     t.snd.snd = (5, 6);
 
-    //print(int_tuple.fst.fst);
-
     return;
-}
+}*/

@@ -14,3 +14,7 @@ even (x) {
         return (odd (x - 1));
     }
 }
+
+main () {
+    print(odd(1));
+}

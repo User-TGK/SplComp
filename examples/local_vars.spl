@@ -1,0 +1,6 @@
+main() {
+    var x = y + 1;
+    var y = 0;
+
+    print(x);
+}

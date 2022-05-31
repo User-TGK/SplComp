@@ -1,0 +1,13 @@
+function_that_returns_void() {
+    print("I return void");
+
+    // Implicit void return
+}
+
+main() {
+    function_that_returns_void();
+    
+    // Explicit void return
+    return;   
+}
+

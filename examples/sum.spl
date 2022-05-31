@@ -17,10 +17,10 @@ main() :: -> Void
     var s = sum(3);
 
     // 15
-    // print(sum(5));
+    print(sum(5));
 
     // 5050
-    // print(sum(100));
+    print(sum(100));
 
     return;
 }
