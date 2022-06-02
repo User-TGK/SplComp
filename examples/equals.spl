@@ -1,0 +1,22 @@
+main () {
+    var a = ((2:2:[]), ('a', 1));
+    var b = ((2:[]), ('a', 1));
+
+    var c = 1 : 2 : [];
+    var d = c : c : [];
+
+    if (d == d) {
+        print("d == d");
+    } else {
+        print("d != d");
+    }
+
+    if (a == b) {
+        print("Equal");
+    }
+    else {
+        print("Not equal");
+    }
+
+    return;
+}

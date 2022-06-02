@@ -100,11 +100,14 @@ fn test_return_statement_ssm() {
 fn test_string_lit_equivalence_ssm() {
     let literal = Atom::StringLiteral(String::from("a3"));
     let list = Expr::Cons(
-        Box::new(Expr::Atom(Atom::CharLiteral('a'))),
-        Box::new(Expr::Cons(
-            Box::new(Expr::Atom(Atom::CharLiteral('3'))),
-            Box::new(Expr::Atom(Atom::EmptyList)),
-        )),
+        Box::new(Expr::Atom(Atom::CharLiteral('a')).into()),
+        Box::new(
+            Expr::Cons(
+                Box::new(Expr::Atom(Atom::CharLiteral('3')).into()),
+                Box::new(Expr::Atom(Atom::EmptyList).into()),
+            )
+            .into(),
+        ),
     );
 
     let expected_instructions = vec![

@@ -1,0 +1,14 @@
+main () {
+    var res = f1(1) + f2(2);
+    return;
+}
+
+f1(x) {
+    print ("links");
+    return x + 1;
+}
+
+f2(x) {
+    print ("rechts");
+    return x + 2;
+}

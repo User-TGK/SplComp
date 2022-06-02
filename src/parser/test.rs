@@ -2,7 +2,7 @@ use super::*;
 
 macro_rules! boxed_int_literal (
         ($value:expr) => (
-            Box::new(Expr::Atom(Atom::IntLiteral(u32::into($value))))
+            Box::new(Expr::Atom(Atom::IntLiteral(u32::into($value))).into())
         )
     );
 
@@ -17,9 +17,11 @@ fn test_field_access() {
     let t1 = Tokens::new(&[], CODE);
 
     let expected1 = Expr::Atom(Atom::Variable(Variable::new(
+        None,
         Id(String::from("x")),
         vec![Field::Hd, Field::Tl, Field::Fst, Field::Snd],
-    )));
+    )))
+    .into();
 
     assert_eq!(r1, Ok((t1, expected1)));
 }
@@ -35,12 +37,16 @@ fn test_tuple_expression() {
     let t1 = Tokens::new(&[], CODE);
 
     let expected1 = Expr::Atom(Atom::Tuple(
-        Box::new(Expr::Mul(
-            boxed_int_literal!(2),
-            Box::new(Expr::Add(boxed_int_literal!(1), boxed_int_literal!(6))),
-        )),
+        Box::new(
+            Expr::Mul(
+                boxed_int_literal!(2),
+                Box::new(Expr::Add(boxed_int_literal!(1), boxed_int_literal!(6)).into()),
+            )
+            .into(),
+        ),
         boxed_int_literal!(8),
-    ));
+    ))
+    .into();
 
     assert_eq!(r1, Ok((t1, expected1)));
 }
@@ -56,9 +62,10 @@ fn test_parenthesized_expr_precedence() {
     let t1 = Tokens::new(&[], CODE);
 
     let expected1 = Expr::Div(
-        Box::new(Expr::Add(boxed_int_literal!(2), boxed_int_literal!(6))),
+        Box::new(Expr::Add(boxed_int_literal!(2), boxed_int_literal!(6)).into()),
         boxed_int_literal!(4),
-    );
+    )
+    .into();
 
     assert_eq!(r1, Ok((t1, expected1)));
 }
@@ -74,12 +81,16 @@ fn test_disjun_expr_parser() {
     let t1 = Tokens::new(&[], CODE);
 
     let expected1 = Expr::Or(
-        Box::new(Expr::Or(
-            Box::new(Expr::Le(boxed_int_literal!(1), boxed_int_literal!(2))),
-            Box::new(Expr::Gt(boxed_int_literal!(9), boxed_int_literal!(3))),
-        )),
-        Box::new(Expr::Equals(boxed_int_literal!(5), boxed_int_literal!(5))),
-    );
+        Box::new(
+            Expr::Or(
+                Box::new(Expr::Le(boxed_int_literal!(1), boxed_int_literal!(2)).into()),
+                Box::new(Expr::Gt(boxed_int_literal!(9), boxed_int_literal!(3)).into()),
+            )
+            .into(),
+        ),
+        Box::new(Expr::Equals(boxed_int_literal!(5), boxed_int_literal!(5)).into()),
+    )
+    .into();
 
     assert_eq!(r1, Ok((t1, expected1)));
 }
@@ -95,12 +106,16 @@ fn test_conjun_expr_parser() {
     let t1 = Tokens::new(&[], CODE);
 
     let expected1 = Expr::And(
-        Box::new(Expr::And(
-            Box::new(Expr::Le(boxed_int_literal!(1), boxed_int_literal!(2))),
-            Box::new(Expr::Gt(boxed_int_literal!(9), boxed_int_literal!(3))),
-        )),
-        Box::new(Expr::Equals(boxed_int_literal!(5), boxed_int_literal!(5))),
-    );
+        Box::new(
+            Expr::And(
+                Box::new(Expr::Le(boxed_int_literal!(1), boxed_int_literal!(2)).into()),
+                Box::new(Expr::Gt(boxed_int_literal!(9), boxed_int_literal!(3)).into()),
+            )
+            .into(),
+        ),
+        Box::new(Expr::Equals(boxed_int_literal!(5), boxed_int_literal!(5)).into()),
+    )
+    .into();
 
     assert_eq!(r1, Ok((t1, expected1)));
 }
@@ -116,12 +131,16 @@ fn test_compare_expr_parser() {
     let t1 = Tokens::new(&[], CODE);
 
     let expected1 = Expr::Le(
-        Box::new(Expr::Equals(
-            Box::new(Expr::Gt(boxed_int_literal!(1), boxed_int_literal!(2))),
-            Box::new(Expr::Add(boxed_int_literal!(3), boxed_int_literal!(1))),
-        )),
+        Box::new(
+            Expr::Equals(
+                Box::new(Expr::Gt(boxed_int_literal!(1), boxed_int_literal!(2)).into()),
+                Box::new(Expr::Add(boxed_int_literal!(3), boxed_int_literal!(1)).into()),
+            )
+            .into(),
+        ),
         boxed_int_literal!(4),
-    );
+    )
+    .into();
 
     assert_eq!(r1, Ok((t1, expected1)));
 }
@@ -137,8 +156,9 @@ fn test_concat_expr_parser() {
     let t1 = Tokens::new(&[], CODE);
     let expected1 = Expr::Cons(
         boxed_int_literal!(1),
-        Box::new(Expr::Cons(boxed_int_literal!(2), boxed_int_literal!(3))),
-    );
+        Box::new(Expr::Cons(boxed_int_literal!(2), boxed_int_literal!(3)).into()),
+    )
+    .into();
 
     assert_eq!(r1, Ok((t1, expected1)));
 }
@@ -153,12 +173,16 @@ fn test_term_expr_parser() {
     let r1 = term_expr_parser(tokens);
     let t1 = Tokens::new(&[], CODE);
     let expected1 = Expr::Sub(
-        Box::new(Expr::Add(
-            boxed_int_literal!(24),
-            Box::new(Expr::Div(boxed_int_literal!(6), boxed_int_literal!(3))),
-        )),
+        Box::new(
+            Expr::Add(
+                boxed_int_literal!(24),
+                Box::new(Expr::Div(boxed_int_literal!(6), boxed_int_literal!(3)).into()),
+            )
+            .into(),
+        ),
         boxed_int_literal!(8),
-    );
+    )
+    .into();
     assert_eq!(r1, Ok((t1, expected1)));
 }
 
@@ -172,12 +196,16 @@ fn test_factor_expr_parser() {
     let r1 = factor_expr_parser(tokens);
     let t1 = Tokens::new(&[], CODE);
     let expected1 = Expr::Div(
-        Box::new(Expr::Mod(
-            Box::new(Expr::Mul(boxed_int_literal!(3), boxed_int_literal!(9))),
-            boxed_int_literal!(2),
-        )),
-        Box::new(Expr::UnaryMinus(boxed_int_literal!(26))),
-    );
+        Box::new(
+            Expr::Mod(
+                Box::new(Expr::Mul(boxed_int_literal!(3), boxed_int_literal!(9)).into()),
+                boxed_int_literal!(2),
+            )
+            .into(),
+        ),
+        Box::new(Expr::UnaryMinus(boxed_int_literal!(26)).into()),
+    )
+    .into();
     assert_eq!(r1, Ok((t1, expected1)));
 }
 
@@ -392,7 +420,7 @@ fn test_assign_statement_parser() {
     assert_eq!(
         statement,
         Statement::Assign(Assign {
-            target: Variable::new(Id("myVar".to_string()), Vec::new()),
+            target: Variable::new(None, Id("myVar".to_string()), Vec::new()),
             value: Expr::Atom(Atom::IntLiteral(123u32.into())).into(),
         })
     );
@@ -406,19 +434,27 @@ fn test_assign_statement_parser() {
 
     assert!(rest.is_empty());
 
-    let value = Expr::Not(Box::new(Expr::And(
-        Box::new(Expr::Atom(Atom::Variable(Variable::new(
-            Id("myVar".to_string()),
-            Vec::new(),
-        )))),
-        Box::new(Expr::Atom(Atom::BoolLiteral(true))),
-    )));
+    let value = Expr::Not(Box::new(
+        Expr::And(
+            Box::new(
+                Expr::Atom(Atom::Variable(Variable::new(
+                    None,
+                    Id("myVar".to_string()),
+                    Vec::new(),
+                )))
+                .into(),
+            ),
+            Box::new(Expr::Atom(Atom::BoolLiteral(true)).into()),
+        )
+        .into(),
+    ))
+    .into();
 
     assert_eq!(
         statement,
         Statement::Assign(Assign {
-            target: Variable::new(Id("myVar".to_string()), Vec::new()),
-            value: value.into(),
+            target: Variable::new(None, Id("myVar".to_string()), Vec::new()),
+            value: value,
         })
     );
 
@@ -434,6 +470,7 @@ fn test_assign_statement_parser() {
         statement,
         Statement::Assign(Assign {
             target: Variable::new(
+                None,
                 Id("myVar".to_string()),
                 vec![Field::Fst, Field::Snd, Field::Tl, Field::Hd]
             ),
@@ -581,10 +618,12 @@ fn test_fun_call_in_return() {
             statements: vec![Statement::Return(Some(
                 Expr::Atom(Atom::FunCall(FunCall::new(
                     Id(String::from("g")),
-                    vec![
-                        Expr::Atom(Atom::Variable(Variable::new(Id(String::from("x")), vec![])))
-                            .into(),
-                    ],
+                    vec![Expr::Atom(Atom::Variable(Variable::new(
+                        None,
+                        Id(String::from("x")),
+                        vec![],
+                    )))
+                    .into()],
                 )))
                 .into(),
             ))],
@@ -611,8 +650,10 @@ fn test_variable_in_return() {
             fun_type: None,
             var_decls: vec![],
             statements: vec![Statement::Return(Some(
-                Expr::Atom(Atom::Variable(Variable::new(Id(String::from("g")), vec![])).into())
-                    .into(),
+                Expr::Atom(
+                    Atom::Variable(Variable::new(None, Id(String::from("g")), vec![])).into(),
+                )
+                .into(),
             ))],
         }],
     };
@@ -760,7 +801,7 @@ fn test_unary_expr_parser() {
 
     let r1 = unary_expr_parser(tokens);
     let t1 = Tokens::new(&[], "");
-    let expected1 = Expr::Not(Box::new(Expr::Atom(Atom::BoolLiteral(true))));
+    let expected1 = Expr::Not(Box::new(Expr::Atom(Atom::BoolLiteral(true)).into())).into();
     assert_eq!(r1, Ok((t1, expected1)));
 
     let tokens: Vec<Token> = Scanner::new(&"-3").unwrap().collect();
@@ -768,7 +809,7 @@ fn test_unary_expr_parser() {
 
     let r2 = unary_expr_parser(tokens);
     let t2 = Tokens::new(&[], "");
-    let expected2 = Expr::UnaryMinus(boxed_int_literal!(3));
+    let expected2 = Expr::UnaryMinus(boxed_int_literal!(3)).into();
     assert_eq!(r2, Ok((t2, expected2)));
 
     let tokens: Vec<Token> = Scanner::new(&"---4").unwrap().collect();
@@ -776,9 +817,10 @@ fn test_unary_expr_parser() {
 
     let r2 = unary_expr_parser(tokens);
     let t2 = Tokens::new(&[], "");
-    let expected2 = Expr::UnaryMinus(Box::new(Expr::UnaryMinus(Box::new(Expr::UnaryMinus(
-        boxed_int_literal!(4),
-    )))));
+    let expected2 = Expr::UnaryMinus(Box::new(
+        Expr::UnaryMinus(Box::new(Expr::UnaryMinus(boxed_int_literal!(4)).into())).into(),
+    ))
+    .into();
     assert_eq!(r2, Ok((t2, expected2)));
 }
 
@@ -793,12 +835,12 @@ fn test_atom_expr_parser() {
 
     let r1 = atom_expr_parser(tokens);
     let t1 = Tokens::new(&tokens[1..], "");
-    assert_eq!(r1, Ok((t1, Expr::Atom(Atom::BoolLiteral(true)))));
+    assert_eq!(r1, Ok((t1, Expr::Atom(Atom::BoolLiteral(true)).into())));
 
     let r2 = atom_expr_parser(t1);
     let t2 = Tokens::new(&tokens[2..], "");
-    let var = Variable::new(Id(String::from("x")), Vec::new());
-    assert_eq!(r2, Ok((t2, Expr::Atom(Atom::Variable(var)))));
+    let var = Variable::new(None, Id(String::from("x")), Vec::new());
+    assert_eq!(r2, Ok((t2, Expr::Atom(Atom::Variable(var)).into())));
 }
 
 #[test]
@@ -814,6 +856,7 @@ fn test_fun_call_parser() {
         vec![
             Expr::Atom(Atom::IntLiteral(123u32.into())).into(),
             Expr::Atom(Atom::Variable(Variable::new(
+                None,
                 Id(String::from("x")),
                 vec![Field::Hd],
             )))

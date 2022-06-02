@@ -1,0 +1,13 @@
+foo(a) {
+    return;
+}
+
+bar(b) {
+    return;
+}
+
+main() {
+    bar(foo);
+
+    return;
+}

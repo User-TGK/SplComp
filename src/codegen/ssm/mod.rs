@@ -1,7 +1,12 @@
+mod builtin;
+
+#[cfg(test)]
+mod test;
+
 use crate::ast::*;
 use crate::tc::{tarjan::ContainsIdentifier, TypeInstance};
 
-use super::builtin::*;
+use builtin::*;
 
 use num_bigint::BigUint;
 use num_traits::cast::ToPrimitive;
@@ -22,7 +27,7 @@ macro_rules! unary_expr(
     ($e:expr, $env:expr, $heap_offset:expr, $prefix_gen:expr, $instruction:expr) => (
         Ok($e.instructions($env, $heap_offset, $prefix_gen)?
             .into_iter()
-            .chain(vec![$instruction])
+            .chain($instruction)
             .collect())
     )
 );
@@ -32,7 +37,7 @@ macro_rules! bin_exp (
         Ok($e1.instructions($env, $heap_offset, $prefix_gen)?
             .into_iter()
             .chain($e2.instructions($env, $heap_offset, $prefix_gen)?.into_iter())
-            .chain(vec![$instruction])
+            .chain($instruction)
             .collect())
     )
 );
@@ -588,26 +593,39 @@ impl SsmInstructions for Expr {
         gen: &mut LabelPrefixGenerator,
     ) -> Result<Vec<SsmInstruction>, String> {
         match self {
-            Expr::Or(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, SsmInstruction::Or),
-            Expr::And(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, SsmInstruction::And),
-            Expr::Equals(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, SsmInstruction::Eq),
-            Expr::NotEquals(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, SsmInstruction::Ne),
-            Expr::Lt(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, SsmInstruction::Lt),
-            Expr::Le(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, SsmInstruction::Le),
-            Expr::Gt(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, SsmInstruction::Gt),
-            Expr::Ge(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, SsmInstruction::Ge),
-            Expr::Add(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, SsmInstruction::Add),
-            Expr::Sub(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, SsmInstruction::Sub),
-            Expr::Mul(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, SsmInstruction::Mul),
-            Expr::Div(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, SsmInstruction::Div),
-            Expr::Mod(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, SsmInstruction::Mod),
-            Expr::UnaryMinus(e) => unary_expr!(e, env, heap_offset, gen, SsmInstruction::Neg),
-            Expr::Not(e) => unary_expr!(e, env, heap_offset, gen, SsmInstruction::Not),
+            Expr::Or(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, vec![SsmInstruction::Or]),
+            Expr::And(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, vec![SsmInstruction::And]),
+            Expr::Equals(e1, e2) => {
+                let mut instructions =
+                    builtin::equals_instructions(e1.expr_type.as_ref().unwrap(), gen);
+                instructions.push(SsmInstruction::Ldr(RR.into()));
+
+                bin_exp!(e1, e2, env, heap_offset, gen, instructions)
+            }
+            Expr::NotEquals(e1, e2) => {
+                let mut instructions =
+                    builtin::equals_instructions(e1.expr_type.as_ref().unwrap(), gen);
+                instructions.push(SsmInstruction::Ldr(RR.into()));
+                instructions.push(SsmInstruction::Ne);
+
+                bin_exp!(e1, e2, env, heap_offset, gen, instructions)
+            }
+            Expr::Lt(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, vec![SsmInstruction::Lt]),
+            Expr::Le(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, vec![SsmInstruction::Le]),
+            Expr::Gt(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, vec![SsmInstruction::Gt]),
+            Expr::Ge(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, vec![SsmInstruction::Ge]),
+            Expr::Add(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, vec![SsmInstruction::Add]),
+            Expr::Sub(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, vec![SsmInstruction::Sub]),
+            Expr::Mul(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, vec![SsmInstruction::Mul]),
+            Expr::Div(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, vec![SsmInstruction::Div]),
+            Expr::Mod(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, vec![SsmInstruction::Mod]),
+            Expr::UnaryMinus(e) => unary_expr!(e, env, heap_offset, gen, vec![SsmInstruction::Neg]),
+            Expr::Not(e) => unary_expr!(e, env, heap_offset, gen, vec![SsmInstruction::Not]),
             Expr::Atom(a) => a.instructions(env, heap_offset, gen),
 
             Expr::Cons(e1, e2) => {
                 *heap_offset = *heap_offset + 2;
-                bin_exp!(e1, e2, env, heap_offset, gen, SsmInstruction::Stmh(2))
+                bin_exp!(e1, e2, env, heap_offset, gen, vec![SsmInstruction::Stmh(2)])
             }
         }
     }

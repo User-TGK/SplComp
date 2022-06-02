@@ -73,6 +73,15 @@ pub enum Type {
     Var(Id),
 }
 
+impl Type {
+    pub fn is_composite(&self) -> bool {
+        match self {
+            Type::List(_) | Type::Tuple(_, _) => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub enum Statement {
     If(If),
@@ -103,13 +112,18 @@ pub struct Assign {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct FunCall {
-    pub(crate) name: Id,
-    pub(crate) args: Vec<TypedExpr>,
+    pub name: Id,
+    pub args: Vec<TypedExpr>,
+    pub fun_type: Option<Type>,
 }
 
 impl FunCall {
     pub fn new(name: Id, args: Vec<TypedExpr>) -> Self {
-        Self { name, args }
+        Self {
+            name,
+            args,
+            fun_type: None,
+        }
     }
 }
 
@@ -130,23 +144,47 @@ impl From<Expr> for TypedExpr {
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Expr {
-    Or(Box<Expr>, Box<Expr>),
-    And(Box<Expr>, Box<Expr>),
-    Equals(Box<Expr>, Box<Expr>),
-    NotEquals(Box<Expr>, Box<Expr>),
-    Lt(Box<Expr>, Box<Expr>),
-    Le(Box<Expr>, Box<Expr>),
-    Gt(Box<Expr>, Box<Expr>),
-    Ge(Box<Expr>, Box<Expr>),
-    Add(Box<Expr>, Box<Expr>),
-    Sub(Box<Expr>, Box<Expr>),
-    Mul(Box<Expr>, Box<Expr>),
-    Div(Box<Expr>, Box<Expr>),
-    Mod(Box<Expr>, Box<Expr>),
-    Cons(Box<Expr>, Box<Expr>),
-    UnaryMinus(Box<Expr>),
-    Not(Box<Expr>),
+    Or(Box<TypedExpr>, Box<TypedExpr>),
+    And(Box<TypedExpr>, Box<TypedExpr>),
+    Equals(Box<TypedExpr>, Box<TypedExpr>),
+    NotEquals(Box<TypedExpr>, Box<TypedExpr>),
+    Lt(Box<TypedExpr>, Box<TypedExpr>),
+    Le(Box<TypedExpr>, Box<TypedExpr>),
+    Gt(Box<TypedExpr>, Box<TypedExpr>),
+    Ge(Box<TypedExpr>, Box<TypedExpr>),
+    Add(Box<TypedExpr>, Box<TypedExpr>),
+    Sub(Box<TypedExpr>, Box<TypedExpr>),
+    Mul(Box<TypedExpr>, Box<TypedExpr>),
+    Div(Box<TypedExpr>, Box<TypedExpr>),
+    Mod(Box<TypedExpr>, Box<TypedExpr>),
+    Cons(Box<TypedExpr>, Box<TypedExpr>),
+    UnaryMinus(Box<TypedExpr>),
+    Not(Box<TypedExpr>),
     Atom(Atom),
+}
+
+impl TypedExpr {
+    pub fn precedence(&self) -> i32 {
+        match self.expr {
+            Expr::Or(..) => 2,
+            Expr::And(..) => 3,
+            Expr::Equals(..)
+            | Expr::NotEquals(..)
+            | Expr::Lt(..)
+            | Expr::Le(..)
+            | Expr::Gt(..)
+            | Expr::Ge(..) => 4,
+            Expr::Cons(..) => 5,
+            Expr::Add(..) | Expr::Sub(..) => 6,
+            Expr::Mul(..) | Expr::Div(..) | Expr::Mod(..) => 7,
+            Expr::UnaryMinus(..) | Expr::Not(..) => 8,
+            Expr::Atom(..) => 9,
+        }
+    }
+
+    pub fn should_be_paranthesized(&self, parent_precedence: i32) -> bool {
+        self.precedence() < parent_precedence
+    }
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -158,18 +196,23 @@ pub enum Atom {
     FunCall(FunCall),
     Variable(Variable),
     EmptyList,
-    Tuple(Box<Expr>, Box<Expr>),
+    Tuple(Box<TypedExpr>, Box<TypedExpr>),
 }
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Variable {
+    pub(crate) var_type: Option<Type>,
     pub(crate) name: Id,
     pub(crate) fields: Vec<Field>,
 }
 
 impl Variable {
-    pub fn new(name: Id, fields: Vec<Field>) -> Self {
-        Self { name, fields }
+    pub fn new(var_type: Option<Type>, name: Id, fields: Vec<Field>) -> Self {
+        Self {
+            var_type,
+            name,
+            fields,
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 use spl_compiler::ast;
 use spl_compiler::ast::pp::PrettyPrintable;
-use spl_compiler::codegen::ssm;
-use spl_compiler::codegen::*;
+use spl_compiler::codegen;
+use spl_compiler::codegen::{SsmInstructions, ToC};
 use spl_compiler::error::*;
 use spl_compiler::parser;
 use spl_compiler::parser::{Scanner, Token, Tokens};
@@ -52,7 +52,7 @@ impl std::str::FromStr for Mode {
             "print" => Ok(Mode::PrettyPrint),
             "type" => Ok(Mode::PrettyPrintTyped),
             "ssm" => Ok(Mode::Ssm),
-            "C" => Ok(Mode::C),
+            "c" => Ok(Mode::C),
             _ => Err(format!("Unknown mode {}", s)),
         }
     }
@@ -67,7 +67,7 @@ impl std::fmt::Display for Mode {
                 Mode::PrettyPrint => "print",
                 Mode::PrettyPrintTyped => "type",
                 Mode::Ssm => "ssm",
-                Mode::C => "C",
+                Mode::C => "c",
             }
         )
     }
@@ -79,6 +79,8 @@ fn print(program: &ast::Program) -> Result<(), Error> {
 
     let mut file = File::create("out.spl")?;
     file.write_all(&to_string(&program.to_pretty(), max_line, tab_size).as_bytes())?;
+
+    log::info!("Finished printing! Printed to 'out.spl'.");
 
     Ok(())
 }
@@ -99,7 +101,7 @@ pub fn main() -> Result<(), Error> {
 
     let tokens = Tokens::new(&tokens, &input);
 
-    // Stage 2: Parse
+    // Stage 2: Parsing
     log::info!("Parsing...");
 
     let parse_result = parser::program_parser(tokens).finish();
@@ -131,9 +133,9 @@ pub fn main() -> Result<(), Error> {
 
         // Stage 4: SSM CodeGen
         Mode::Ssm => {
-            let mut code_gen_env = ssm::LocationEnv::default();
+            let mut code_gen_env = codegen::ssm::LocationEnv::default();
             let mut heap_offset = 0;
-            let mut prefix_gen = ssm::LabelPrefixGenerator::default();
+            let mut prefix_gen = codegen::ssm::LabelPrefixGenerator::default();
 
             log::info!("Generating SSM instructions...");
             let ssm_instructions: Vec<String> = program
@@ -148,15 +150,34 @@ pub fn main() -> Result<(), Error> {
             for instruction in ssm_instructions {
                 write!(file, "{}\n", instruction)?;
             }
+
+            log::info!("Code written to 'out.ssm'.");
         }
-        // Stage 3: (Extension) C CodeGen
+        // Stage 4: (Extension) C CodeGen
         Mode::C => {
             log::info!("Generating C code...");
-            log::warn!("Unimplemented C extension");
+
+            let mut file = File::create("out.c")?;
+
+            let max_line = Some(40);
+            let tab_size = 4;
+
+            let mut env = codegen::c::CEnv::default();
+
+            file.write_all(
+                &to_string(
+                    &program.to_c(&mut env).map_err(|e| Error::CodeGenError(e))?,
+                    max_line,
+                    tab_size,
+                )
+                .as_bytes(),
+            )?;
+            log::info!("Code written to 'out.c'.");
         }
         _ => unreachable!(),
     }
 
     log::info!("Finished compiling!");
+
     Ok(())
 }

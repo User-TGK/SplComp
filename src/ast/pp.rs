@@ -10,35 +10,13 @@ macro_rules! bin_expr (
 
 macro_rules! child_expr (
     ($e:expr, $parent_precedence:expr) => (
-        if should_be_paranthesized($e, $parent_precedence) {
+        if $e.should_be_paranthesized($parent_precedence) {
             Box::new(Group::new("(".join(($e.to_pretty()).join(")"))))
         } else {
             $e.to_pretty()
         }
     )
 );
-
-fn precedence(expr: &Expr) -> i32 {
-    match expr {
-        Expr::Or(..) => 2,
-        Expr::And(..) => 3,
-        Expr::Equals(..)
-        | Expr::NotEquals(..)
-        | Expr::Lt(..)
-        | Expr::Le(..)
-        | Expr::Gt(..)
-        | Expr::Ge(..) => 4,
-        Expr::Cons(..) => 5,
-        Expr::Add(..) | Expr::Sub(..) => 6,
-        Expr::Mul(..) | Expr::Div(..) | Expr::Mod(..) => 7,
-        Expr::UnaryMinus(..) | Expr::Not(..) => 8,
-        Expr::Atom(..) => 9,
-    }
-}
-
-fn should_be_paranthesized(expr: &Expr, parent_precedence: i32) -> bool {
-    precedence(expr) < parent_precedence
-}
 
 pub trait PrettyPrintable {
     fn to_pretty(&self) -> Box<dyn Pretty>;
@@ -83,7 +61,7 @@ impl PrettyPrintable for VarDecl {
                 .to_pretty()
                 .join(self.name.to_pretty())
                 .join(" = ")
-                .join(self.value.expr.to_pretty())
+                .join(self.value.to_pretty())
                 .join(";"),
         )
     }
@@ -106,6 +84,10 @@ impl PrettyPrintable for FunDecl {
                         .join(pretty_fun_type(&self.fun_type))
                         .join(Newline)
                         .join("{")
+                        .join(Indent(Sep(0).join(delimited(
+                            &"".join(Sep(1)).join(Sep(1)),
+                            self.var_decls.iter().map(VarDecl::to_pretty),
+                        ))))
                         .join(Indent(Sep(0).join(delimited(
                             &Sep(1),
                             self.statements.iter().map(Statement::to_pretty),
@@ -182,7 +164,7 @@ impl PrettyPrintable for Statement {
             Statement::Assign(a) => a.to_pretty(),
             Statement::FunCall(f) => Box::new(f.to_pretty().join(";")),
             Statement::Return(e) => match e {
-                Some(e) => Box::new("return ".join(e.expr.to_pretty()).join(";")),
+                Some(e) => Box::new("return ".join(e.to_pretty()).join(";")),
                 None => Box::new("return;"),
             },
         }
@@ -208,7 +190,7 @@ fn to_pretty_else_case(false_body: &Vec<Statement>) -> Box<dyn Pretty> {
 impl PrettyPrintable for If {
     fn to_pretty(&self) -> Box<dyn Pretty> {
         Box::new(
-            "if (".join(self.cond.expr.to_pretty()).join(") {").join(
+            "if (".join(self.cond.to_pretty()).join(") {").join(
                 block(delimited(
                     &"".join(Sep(1)),
                     self.if_true.iter().map(Statement::to_pretty),
@@ -225,7 +207,6 @@ impl PrettyPrintable for While {
         Box::new(
             "while (".join(
                 self.cond
-                    .expr
                     .to_pretty()
                     .join(") {")
                     .join(block(delimited(
@@ -244,17 +225,17 @@ impl PrettyPrintable for Assign {
             self.target
                 .to_pretty()
                 .join(" = ")
-                .join(self.value.expr.to_pretty())
+                .join(self.value.to_pretty())
                 .join(";"),
         )
     }
 }
 
-impl PrettyPrintable for Expr {
+impl PrettyPrintable for TypedExpr {
     fn to_pretty(&self) -> Box<dyn Pretty> {
-        let precedence = precedence(self);
+        let precedence = self.precedence();
 
-        match self {
+        match &self.expr {
             Expr::Or(e1, e2) => bin_expr!(e1, e2, precedence, " || "),
             Expr::And(e1, e2) => bin_expr!(e1, e2, precedence, " && "),
             Expr::Equals(e1, e2) => bin_expr!(e1, e2, precedence, " == "),
@@ -306,7 +287,7 @@ impl PrettyPrintable for FunCall {
             self.name.0.to_string().join("(").join(
                 block(delimited(
                     &",".join(Sep(1)),
-                    self.args.iter().map(|e| e.expr.to_pretty()),
+                    self.args.iter().map(|e| e.to_pretty()),
                 ))
                 .join(")"),
             ),

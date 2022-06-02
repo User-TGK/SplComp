@@ -1,0 +1,6 @@
+main() {
+    // Forgot the ';'
+    var x = 1
+
+    print(x);
+}

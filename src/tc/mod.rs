@@ -352,11 +352,7 @@ impl Context {
             (true, true) => self.local_vars.get(identifier),
             (true, false) => self.local_vars.get(identifier),
             (false, true) => self.global_vars.get(identifier),
-            (false, false) => {
-                log::error!("Unbounded variable '{}'.", identifier);
-
-                None
-            }
+            (false, false) => None,
         }
     }
 }
@@ -423,8 +419,11 @@ impl TypeInference for Variable {
                 if self.fields.is_empty() {
                     expected.mgu(&s.instantiate(generator))
                 } else {
-                    let mut call_expr =
-                        Expr::Atom(Atom::Variable(Variable::new(self.name.clone(), vec![])));
+                    let mut call_expr = Expr::Atom(Atom::Variable(Variable::new(
+                        None,
+                        self.name.clone(),
+                        vec![],
+                    )));
 
                     for f in &self.fields {
                         let builtin_identifier = f.builtin_identifier();
@@ -490,42 +489,20 @@ impl TypeInference for Statement {
 
                 Ok(s3)
             }
-            Statement::Assign(a) => match context.get_var(&a.target.name) {
-                Some(ts) => {
-                    if !a.target.fields.is_empty() {
-                        let fresh = generator.new_var();
+            Statement::Assign(a) => {
+                let s = a.infer(context, expected, generator)?;
 
-                        let mut call_expr = Expr::Atom(Atom::Variable(Variable::new(
-                            a.target.name.clone(),
-                            vec![],
-                        )));
+                a.target.var_type = Some(
+                    context
+                        .apply(&s)
+                        .get_var(&a.target.name)
+                        .ok_or(format!("Missing var from env: {}", a.target.name))?
+                        .instantiate(generator)
+                        .apply(&s),
+                );
 
-                        for f in &a.target.fields {
-                            let builtin_identifier = f.builtin_identifier();
-                            call_expr = Expr::Atom(Atom::FunCall(FunCall::new(
-                                builtin_identifier,
-                                vec![call_expr.into()],
-                            )));
-                        }
-
-                        let s = call_expr.infer(context, &fresh.clone().into(), generator)?;
-
-                        let s2 = a
-                            .value
-                            .infer(
-                                &context.apply(&s),
-                                &Into::<Type>::into(fresh.clone()).apply(&s),
-                                generator,
-                            )?
-                            .compose(&s);
-
-                        Ok(s2)
-                    } else {
-                        a.value.infer(context, &ts.ty, generator)
-                    }
-                }
-                None => Err(format!("Unknown identifier '{}'", a.target.name)),
-            },
+                Ok(s)
+            }
 
             Statement::FunCall(f) => f.infer(context, expected, generator),
 
@@ -533,6 +510,53 @@ impl TypeInference for Statement {
                 Some(e) => e.infer(context, expected, generator),
                 None => expected.mgu(&Type::Void),
             },
+        }
+    }
+}
+
+impl TypeInference for Assign {
+    fn infer(
+        &mut self,
+        context: &Context,
+        _expected: &Type,
+        generator: &mut VarGenerator,
+    ) -> Result<Subst, String> {
+        match context.get_var(&self.target.name) {
+            Some(ts) => {
+                if !self.target.fields.is_empty() {
+                    let fresh = generator.new_var();
+
+                    let mut call_expr = Expr::Atom(Atom::Variable(Variable::new(
+                        None,
+                        self.target.name.clone(),
+                        vec![],
+                    )));
+
+                    for f in &self.target.fields {
+                        let builtin_identifier = f.builtin_identifier();
+                        call_expr = Expr::Atom(Atom::FunCall(FunCall::new(
+                            builtin_identifier,
+                            vec![call_expr.into()],
+                        )));
+                    }
+
+                    let s = call_expr.infer(context, &fresh.clone().into(), generator)?;
+
+                    let s2 = self
+                        .value
+                        .infer(
+                            &context.apply(&s),
+                            &Into::<Type>::into(fresh.clone()).apply(&s),
+                            generator,
+                        )?
+                        .compose(&s);
+
+                    Ok(s2)
+                } else {
+                    self.value.infer(context, &ts.ty, generator)
+                }
+            }
+            None => Err(format!("Unknown identifier '{}'", self.target.name)),
         }
     }
 }
@@ -551,20 +575,22 @@ impl TypeInference for FunCall {
 
                 for a in &mut self.args {
                     let fresh = generator.new_var();
-
                     let s = a.infer(&context.apply(&sub), &fresh.clone().into(), generator)?;
 
+                    sub = sub.compose(&s);
+
                     if let Some(t) = s.get(&fresh) {
-                        arg_types.push(t.clone() /*.apply(&s)*/);
+                        arg_types.push(t.clone().apply(&sub));
                     } else {
                         arg_types.push(fresh.clone().into());
                     }
-
-                    sub = sub.compose(&s);
                 }
 
                 let fun_type = Type::Function(arg_types, Box::new(expected.clone())).apply(&sub);
-                let final_s = ts.instantiate(generator).apply(&sub).mgu(&fun_type)?;
+                let gen_type = ts.instantiate(generator);
+                let final_s = gen_type.apply(&sub).mgu(&fun_type)?;
+
+                self.fun_type = Some(gen_type);
 
                 Ok(sub.compose(&final_s))
             }
@@ -707,7 +733,17 @@ impl TypeInference for TypedExpr {
     ) -> Result<Subst, String> {
         let s = self.expr.infer(context, expected, generator)?;
 
-        self.expr_type = Some(expected.apply(&s));
+        if let Type::Var(v) = expected {
+            if let Some(t) = s.get(v) {
+                // This was needed to do things as `print(bool_list.tl)`, the type var
+                // would not be substituted otherwise.
+                self.expr_type = Some(t.apply(&s));
+            } else {
+                self.expr_type = Some(expected.apply(&s));
+            }
+        } else {
+            self.expr_type = Some(expected.apply(&s));
+        }
 
         Ok(s)
     }
@@ -820,7 +856,19 @@ impl TypeInference for Expr {
                         f.infer(context, expected, generator)
                     }
                 }
-                Atom::Variable(v) => v.infer(context, expected, generator),
+                Atom::Variable(v) => {
+                    let s = v.infer(context, expected, generator)?;
+
+                    v.var_type = Some(
+                        context
+                            .apply(&s)
+                            .get_var(&v.name)
+                            .ok_or(format!("Missing var from env: {}", v.name))?
+                            .instantiate(generator),
+                    );
+
+                    Ok(s)
+                }
 
                 Atom::EmptyList => {
                     let alpha = Type::Var(generator.new_var());
