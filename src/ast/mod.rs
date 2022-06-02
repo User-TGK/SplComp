@@ -144,28 +144,28 @@ impl From<Expr> for TypedExpr {
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Expr {
-    Or(Box<Expr>, Box<Expr>),
-    And(Box<Expr>, Box<Expr>),
-    Equals(Box<Expr>, Box<Expr>),
-    NotEquals(Box<Expr>, Box<Expr>),
-    Lt(Box<Expr>, Box<Expr>),
-    Le(Box<Expr>, Box<Expr>),
-    Gt(Box<Expr>, Box<Expr>),
-    Ge(Box<Expr>, Box<Expr>),
-    Add(Box<Expr>, Box<Expr>),
-    Sub(Box<Expr>, Box<Expr>),
-    Mul(Box<Expr>, Box<Expr>),
-    Div(Box<Expr>, Box<Expr>),
-    Mod(Box<Expr>, Box<Expr>),
-    Cons(Box<Expr>, Box<Expr>),
-    UnaryMinus(Box<Expr>),
-    Not(Box<Expr>),
+    Or(Box<TypedExpr>, Box<TypedExpr>),
+    And(Box<TypedExpr>, Box<TypedExpr>),
+    Equals(Box<TypedExpr>, Box<TypedExpr>),
+    NotEquals(Box<TypedExpr>, Box<TypedExpr>),
+    Lt(Box<TypedExpr>, Box<TypedExpr>),
+    Le(Box<TypedExpr>, Box<TypedExpr>),
+    Gt(Box<TypedExpr>, Box<TypedExpr>),
+    Ge(Box<TypedExpr>, Box<TypedExpr>),
+    Add(Box<TypedExpr>, Box<TypedExpr>),
+    Sub(Box<TypedExpr>, Box<TypedExpr>),
+    Mul(Box<TypedExpr>, Box<TypedExpr>),
+    Div(Box<TypedExpr>, Box<TypedExpr>),
+    Mod(Box<TypedExpr>, Box<TypedExpr>),
+    Cons(Box<TypedExpr>, Box<TypedExpr>),
+    UnaryMinus(Box<TypedExpr>),
+    Not(Box<TypedExpr>),
     Atom(Atom),
 }
 
-impl Expr {
+impl TypedExpr {
     pub fn precedence(&self) -> i32 {
-        match self {
+        match self.expr {
             Expr::Or(..) => 2,
             Expr::And(..) => 3,
             Expr::Equals(..)
@@ -196,7 +196,7 @@ pub enum Atom {
     FunCall(FunCall),
     Variable(Variable),
     EmptyList,
-    Tuple(Box<Expr>, Box<Expr>),
+    Tuple(Box<TypedExpr>, Box<TypedExpr>),
 }
 
 #[derive(PartialEq, Debug, Clone)]

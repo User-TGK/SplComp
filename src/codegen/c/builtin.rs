@@ -38,7 +38,7 @@ pub fn builtin_function(call: &FunCall, env: &mut CEnv) -> Result<Option<Box<dyn
 
                 Ok(Some(Box::new(
                     "print((intptr_t) "
-                        .join(call.args[0].expr.to_c(env)?)
+                        .join(call.args[0].to_c(env)?)
                         .join(", ")
                         .join(types)
                         .join(");")

@@ -61,7 +61,7 @@ impl PrettyPrintable for VarDecl {
                 .to_pretty()
                 .join(self.name.to_pretty())
                 .join(" = ")
-                .join(self.value.expr.to_pretty())
+                .join(self.value.to_pretty())
                 .join(";"),
         )
     }
@@ -164,7 +164,7 @@ impl PrettyPrintable for Statement {
             Statement::Assign(a) => a.to_pretty(),
             Statement::FunCall(f) => Box::new(f.to_pretty().join(";")),
             Statement::Return(e) => match e {
-                Some(e) => Box::new("return ".join(e.expr.to_pretty()).join(";")),
+                Some(e) => Box::new("return ".join(e.to_pretty()).join(";")),
                 None => Box::new("return;"),
             },
         }
@@ -190,7 +190,7 @@ fn to_pretty_else_case(false_body: &Vec<Statement>) -> Box<dyn Pretty> {
 impl PrettyPrintable for If {
     fn to_pretty(&self) -> Box<dyn Pretty> {
         Box::new(
-            "if (".join(self.cond.expr.to_pretty()).join(") {").join(
+            "if (".join(self.cond.to_pretty()).join(") {").join(
                 block(delimited(
                     &"".join(Sep(1)),
                     self.if_true.iter().map(Statement::to_pretty),
@@ -207,7 +207,6 @@ impl PrettyPrintable for While {
         Box::new(
             "while (".join(
                 self.cond
-                    .expr
                     .to_pretty()
                     .join(") {")
                     .join(block(delimited(
@@ -226,17 +225,17 @@ impl PrettyPrintable for Assign {
             self.target
                 .to_pretty()
                 .join(" = ")
-                .join(self.value.expr.to_pretty())
+                .join(self.value.to_pretty())
                 .join(";"),
         )
     }
 }
 
-impl PrettyPrintable for Expr {
+impl PrettyPrintable for TypedExpr {
     fn to_pretty(&self) -> Box<dyn Pretty> {
         let precedence = self.precedence();
 
-        match self {
+        match &self.expr {
             Expr::Or(e1, e2) => bin_expr!(e1, e2, precedence, " || "),
             Expr::And(e1, e2) => bin_expr!(e1, e2, precedence, " && "),
             Expr::Equals(e1, e2) => bin_expr!(e1, e2, precedence, " == "),
@@ -288,7 +287,7 @@ impl PrettyPrintable for FunCall {
             self.name.0.to_string().join("(").join(
                 block(delimited(
                     &",".join(Sep(1)),
-                    self.args.iter().map(|e| e.expr.to_pretty()),
+                    self.args.iter().map(|e| e.to_pretty()),
                 ))
                 .join(")"),
             ),

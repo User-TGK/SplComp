@@ -28,7 +28,7 @@ impl Preprocess for Program {
 
         // Add all edges
         for v in &self.var_decls {
-            let variables = v.value.expr.variables();
+            let variables = v.value.variables();
 
             for var in variables {
                 var_graph.add_edge(var_id_index_map[&v.name].1, var_id_index_map[&var].1, ());
@@ -149,7 +149,7 @@ impl ContainsIdentifier for Vec<VarDecl> {
         let mut res = vec![];
 
         for v in self {
-            res.append(&mut v.value.expr.function_calls());
+            res.append(&mut v.value.function_calls());
         }
 
         res
@@ -176,7 +176,7 @@ impl ContainsIdentifier for Statement {
             Statement::Assign(a) => a.function_calls(),
             Statement::FunCall(f) => f.function_calls(),
             Statement::Return(e) => match e {
-                Some(e) => e.expr.function_calls(),
+                Some(e) => e.function_calls(),
                 None => vec![],
             },
         }
@@ -187,7 +187,7 @@ impl ContainsIdentifier for If {
     fn function_calls(&self) -> Vec<Id> {
         let mut res = vec![];
 
-        res.append(&mut self.cond.expr.function_calls());
+        res.append(&mut self.cond.function_calls());
         res.append(&mut self.if_true.function_calls());
         res.append(&mut self.if_false.function_calls());
 
@@ -199,7 +199,7 @@ impl ContainsIdentifier for While {
     fn function_calls(&self) -> Vec<Id> {
         let mut res = vec![];
 
-        res.append(&mut self.cond.expr.function_calls());
+        res.append(&mut self.cond.function_calls());
         res.append(&mut self.body.function_calls());
 
         res
@@ -210,7 +210,7 @@ impl ContainsIdentifier for Assign {
     fn function_calls(&self) -> Vec<Id> {
         let mut res = vec![];
 
-        res.append(&mut self.value.expr.function_calls());
+        res.append(&mut self.value.function_calls());
 
         res
     }
@@ -221,7 +221,7 @@ impl ContainsIdentifier for FunCall {
         let mut res = vec![self.name.clone()];
 
         for a in &self.args {
-            res.append(&mut a.expr.function_calls());
+            res.append(&mut a.function_calls());
         }
 
         res
@@ -233,16 +233,16 @@ impl ContainsVarIdentifier for FunCall {
         let mut res = vec![];
 
         for a in &self.args {
-            res.append(&mut a.expr.variables());
+            res.append(&mut a.variables());
         }
 
         res
     }
 }
 
-impl ContainsIdentifier for Expr {
+impl ContainsIdentifier for TypedExpr {
     fn function_calls(&self) -> Vec<Id> {
-        match self {
+        match &self.expr {
             Expr::Or(e1, e2)
             | Expr::And(e1, e2)
             | Expr::Equals(e1, e2)
@@ -267,9 +267,9 @@ impl ContainsIdentifier for Expr {
     }
 }
 
-impl ContainsVarIdentifier for Expr {
+impl ContainsVarIdentifier for TypedExpr {
     fn variables(&self) -> Vec<Id> {
-        match self {
+        match &self.expr {
             Expr::Or(e1, e2)
             | Expr::And(e1, e2)
             | Expr::Equals(e1, e2)

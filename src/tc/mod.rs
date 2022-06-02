@@ -352,11 +352,7 @@ impl Context {
             (true, true) => self.local_vars.get(identifier),
             (true, false) => self.local_vars.get(identifier),
             (false, true) => self.global_vars.get(identifier),
-            (false, false) => {
-                log::error!("Unbounded variable '{}'.", identifier);
-
-                None
-            }
+            (false, false) => None,
         }
     }
 }

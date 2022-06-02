@@ -88,7 +88,7 @@ impl ToC for (&Id, &TypedExpr) {
             self.0
                 .to_c(env)?
                 .join(" = ")
-                .join(self.1.expr.to_c(env)?)
+                .join(self.1.to_c(env)?)
                 .join(";"),
         ))
     }
@@ -225,6 +225,9 @@ impl ToC for Program {
 
         "};
 
+        let decls: Result<Vec<Box<dyn Pretty>>, String> =
+            self.fun_decls.iter().map(|f| to_c_decl(f, env)).collect();
+
         if self.var_decls.is_empty() {
             let mut new_env = env.clone().with_initialize(false);
             let fun_decls: Result<Vec<Box<dyn Pretty>>, String> = self
@@ -235,20 +238,30 @@ impl ToC for Program {
             let fun_decls = fun_decls?;
 
             Ok(Box::new(
-                prelude.join(delimited(&"".join(Sep(1)).join(Sep(1)), fun_decls)),
+                prelude
+                    .join(delimited(&"".join(Sep(1)), decls?))
+                    .join(Newline)
+                    .join(Newline)
+                    .join(delimited(&"".join(Sep(1)).join(Sep(1)), fun_decls)),
             ))
         } else {
             Ok(Box::new(
-                prelude.join("// Global variables").join(Newline).join(
-                    global_var_decls(&self.var_decls, env)?
-                        .join(Newline)
-                        .join("// Function declarations")
-                        .join(Newline)
-                        .join(delimited(
-                            &"".join(Sep(1)).join(Sep(1)),
-                            error_iter!(self.fun_decls.iter(), env),
-                        )),
-                ),
+                prelude
+                    .join(delimited(&"".join(Sep(1)), decls?))
+                    .join(Newline)
+                    .join(Newline)
+                    .join("// Global variables")
+                    .join(Newline)
+                    .join(
+                        global_var_decls(&self.var_decls, env)?
+                            .join(Newline)
+                            .join("// Function declarations")
+                            .join(Newline)
+                            .join(delimited(
+                                &"".join(Sep(1)).join(Sep(1)),
+                                error_iter!(self.fun_decls.iter(), env),
+                            )),
+                    ),
             ))
         }
     }
@@ -264,7 +277,7 @@ impl ToC for VarDecl {
                 .join(" ")
                 .join(self.name.to_c(env)?)
                 .join(" = ")
-                .join(self.value.expr.to_c(env)?)
+                .join(self.value.to_c(env)?)
                 .join(";"),
         ))
     }
@@ -276,6 +289,25 @@ impl ToC for (&Type, &Id) {
             self.0.to_c(env)?.join(" ").join(self.1.to_c(env)?),
         ))
     }
+}
+
+fn to_c_decl(f: &FunDecl, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
+    if let Some(t) = &f.fun_type {
+        if let Type::Function(arg_types, rt) = t {
+            return Ok(Box::new(
+                rt.to_c(env)?
+                    .join(" ")
+                    .join(f.name.to_c(env)?)
+                    .join("(")
+                    .join(delimited(
+                        &", ",
+                        error_iter!(arg_types.iter().zip(f.params.iter()), env),
+                    ))
+                    .join(");"),
+            ));
+        }
+    }
+    unreachable!()
 }
 
 impl ToC for FunDecl {
@@ -387,7 +419,7 @@ impl ToC for Statement {
                 }
             }
             Statement::Return(e) => match e {
-                Some(e) => Ok(Box::new("return ".join(e.expr.to_c(env)?).join(";"))),
+                Some(e) => Ok(Box::new("return ".join(e.to_c(env)?).join(";"))),
 
                 // This is only useful for "early returns"
                 None => Ok(Box::new("return;")),
@@ -415,7 +447,7 @@ fn to_c_else_case(false_body: &Vec<Statement>, env: &mut CEnv) -> Result<Box<dyn
 impl ToC for If {
     fn to_c(&self, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
         Ok(Box::new(
-            "if (".join(self.cond.expr.to_c(env)?).join(") {").join(
+            "if (".join(self.cond.to_c(env)?).join(") {").join(
                 block(delimited(
                     &"".join(Sep(1)),
                     error_iter!(self.if_true.iter(), env),
@@ -432,7 +464,6 @@ impl ToC for While {
         Ok(Box::new(
             "while (".join(
                 self.cond
-                    .expr
                     .to_c(env)?
                     .join(") {")
                     .join(block(delimited(
@@ -456,7 +487,7 @@ impl ToC for Assign {
         Ok(Box::new(
             lhs.join(" = ")
                 .join(
-                    self.value.expr.to_c(
+                    self.value.to_c(
                         &mut env
                             .clone()
                             .with_cast_to_intptr(!self.target.fields.is_empty()),
@@ -467,11 +498,11 @@ impl ToC for Assign {
     }
 }
 
-impl ToC for Expr {
+impl ToC for TypedExpr {
     fn to_c(&self, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
         let precedence = self.precedence();
 
-        match self {
+        match &self.expr {
             Expr::Or(e1, e2) => bin_expr!(e1, e2, env, precedence, " || "),
             Expr::And(e1, e2) => bin_expr!(e1, e2, env, precedence, " && "),
             Expr::Equals(e1, e2) => bin_expr!(e1, e2, env, precedence, " == "),
@@ -520,13 +551,14 @@ impl ToC for Atom {
             }),
             Atom::CharLiteral(c) => Box::new(format!("'{}'", c.to_string())),
             Atom::StringLiteral(string) => {
-                let mut list_expr = Expr::Atom(Atom::EmptyList);
+                let mut list_expr: TypedExpr = Expr::Atom(Atom::EmptyList).into();
 
                 for c in string.chars().rev() {
                     list_expr = Expr::Cons(
-                        Box::new(Expr::Atom(Atom::CharLiteral(c))),
+                        Box::new(Expr::Atom(Atom::CharLiteral(c)).into()),
                         Box::new(list_expr),
-                    );
+                    )
+                    .into();
                 }
 
                 list_expr.to_c(env)?
@@ -582,7 +614,7 @@ impl ToC for FunCall {
 
             let annotated_args: Vec<Join<&str, Box<dyn Pretty>>> = at
                 .iter()
-                .zip(error_iter!(self.args.iter().map(|e| &e.expr), env))
+                .zip(error_iter!(self.args.iter(), env))
                 .map(|(t, e)| {
                     let pre = match t {
                         Type::Var(_) => "(intptr_t)",
@@ -603,7 +635,7 @@ impl ToC for FunCall {
                 self.name.0.to_string().join("(").join(
                     block(delimited(
                         &",".join(Sep(1)),
-                        error_iter!(self.args.iter().map(|a| &a.expr), env),
+                        error_iter!(self.args.iter(), env),
                     ))
                     .join(")"),
                 ),
