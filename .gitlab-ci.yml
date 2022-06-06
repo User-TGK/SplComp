@@ -28,7 +28,8 @@ variables:
 test:cargo:
   before_script:
     - apt update -y
-    - apt install -y curl default-jre
+    - apt install -y curl default-jre build-essential
+    - gcc --version
     - java -version
     - curl -LSs https://gitlab.science.ru.nl/compilerconstruction/ssm/builds/artifacts/master/raw/ssm.zip?job=build > ssm.zip
     - unzip ssm.zip

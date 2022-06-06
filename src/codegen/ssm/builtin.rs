@@ -2,7 +2,10 @@ use crate::ast::*;
 
 use super::*;
 
-fn print_instructions(t: &Type, prefix_gen: &mut LabelPrefixGenerator) -> Vec<SsmInstruction> {
+fn print_instructions(
+    t: &Type,
+    prefix_gen: &mut LabelPrefixGenerator,
+) -> Result<Vec<SsmInstruction>, String> {
     let mut instructions = vec![];
 
     match t {
@@ -47,7 +50,7 @@ fn print_instructions(t: &Type, prefix_gen: &mut LabelPrefixGenerator) -> Vec<Ss
             // Not yet the last one
             instructions.push(SsmInstruction::Ldl(1));
             instructions.push(SsmInstruction::Lda(-1));
-            instructions.append(&mut print_instructions(t, prefix_gen));
+            instructions.append(&mut print_instructions(t, prefix_gen)?);
             instructions.push(SsmInstruction::Ldc(','.into()));
             instructions.push(SsmInstruction::Trap(1));
 
@@ -59,7 +62,7 @@ fn print_instructions(t: &Type, prefix_gen: &mut LabelPrefixGenerator) -> Vec<Ss
             instructions.push(SsmInstruction::Label(last_char));
             instructions.push(SsmInstruction::Ldl(1));
             instructions.push(SsmInstruction::Lda(-1));
-            instructions.append(&mut print_instructions(t, prefix_gen));
+            instructions.append(&mut print_instructions(t, prefix_gen)?);
 
             instructions.push(SsmInstruction::Label(list_end));
             instructions.push(SsmInstruction::Ldc(']'.into()));
@@ -81,14 +84,14 @@ fn print_instructions(t: &Type, prefix_gen: &mut LabelPrefixGenerator) -> Vec<Ss
 
             instructions.push(SsmInstruction::Ldl(1));
             instructions.push(SsmInstruction::Lda(-1));
-            instructions.append(&mut print_instructions(t1, prefix_gen));
+            instructions.append(&mut print_instructions(t1, prefix_gen)?);
 
             instructions.push(SsmInstruction::Ldc(','.into()));
             instructions.push(SsmInstruction::Trap(1));
 
             instructions.push(SsmInstruction::Ldl(1));
             instructions.push(SsmInstruction::Lda(0));
-            instructions.append(&mut print_instructions(t2, prefix_gen));
+            instructions.append(&mut print_instructions(t2, prefix_gen)?);
 
             instructions.push(SsmInstruction::Ldc(')'.into()));
             instructions.push(SsmInstruction::Trap(1));
@@ -96,14 +99,20 @@ fn print_instructions(t: &Type, prefix_gen: &mut LabelPrefixGenerator) -> Vec<Ss
             instructions.push(SsmInstruction::Unlink)
         }
         _ => {
-            log::warn!("Print called with type {:?}", t);
+            return Err(format!(
+                "Illegal call to overloaded function print with type '{:?}'",
+                t
+            ));
         }
     }
 
-    instructions
+    Ok(instructions)
 }
 
-pub fn equals_instructions(t: &Type, prefix_gen: &mut LabelPrefixGenerator) -> Vec<SsmInstruction> {
+pub fn equals_instructions(
+    t: &Type,
+    prefix_gen: &mut LabelPrefixGenerator,
+) -> Result<Vec<SsmInstruction>, String> {
     let mut instructions = vec![];
 
     match t {
@@ -153,7 +162,7 @@ pub fn equals_instructions(t: &Type, prefix_gen: &mut LabelPrefixGenerator) -> V
             instructions.push(SsmInstruction::Ldl(3));
             instructions.push(SsmInstruction::Lda(-1));
 
-            instructions.append(&mut equals_instructions(t, prefix_gen));
+            instructions.append(&mut equals_instructions(t, prefix_gen)?);
             instructions.push(SsmInstruction::Ldr(RR.into()));
             instructions.push(SsmInstruction::Brf(list_end.clone()));
 
@@ -194,7 +203,7 @@ pub fn equals_instructions(t: &Type, prefix_gen: &mut LabelPrefixGenerator) -> V
             instructions.push(SsmInstruction::Lda(-1));
             instructions.push(SsmInstruction::Ldl(2));
             instructions.push(SsmInstruction::Lda(-1));
-            instructions.append(&mut equals_instructions(t1, prefix_gen));
+            instructions.append(&mut equals_instructions(t1, prefix_gen)?);
 
             instructions.push(SsmInstruction::Ldr(RR.into()));
             instructions.push(SsmInstruction::Brf(tuple_end.clone()));
@@ -203,37 +212,40 @@ pub fn equals_instructions(t: &Type, prefix_gen: &mut LabelPrefixGenerator) -> V
             instructions.push(SsmInstruction::Lda(0));
             instructions.push(SsmInstruction::Ldl(2));
             instructions.push(SsmInstruction::Lda(0));
-            instructions.append(&mut equals_instructions(t2, prefix_gen));
+            instructions.append(&mut equals_instructions(t2, prefix_gen)?);
 
             instructions.push(SsmInstruction::Label(tuple_end));
             instructions.push(SsmInstruction::Unlink)
         }
         _ => {
-            log::warn!("== called with type {:?}", t);
+            return Err(format!(
+                "Illegal call to overloaded operator (==) with type '{:?}'",
+                t
+            ));
         }
     }
 
-    instructions
+    Ok(instructions)
 }
 
 pub fn builtin_function(
     call: &FunCall,
     prefix_gen: &mut LabelPrefixGenerator,
-) -> Option<Vec<SsmInstruction>> {
+) -> Result<Option<Vec<SsmInstruction>>, String> {
     let mut instructions = vec![];
 
     match call.name.0.as_str() {
         "print" => {
             if call.args.len() == 1 {
                 instructions =
-                    print_instructions(call.args[0].expr_type.as_ref().unwrap(), prefix_gen);
+                    print_instructions(call.args[0].expr_type.as_ref().unwrap(), prefix_gen)?;
 
                 instructions.push(SsmInstruction::Ldc('\n' as u32));
                 instructions.push(SsmInstruction::Trap(1));
 
-                Some(instructions)
+                Ok(Some(instructions))
             } else {
-                None
+                Ok(None)
             }
         }
 
@@ -241,9 +253,9 @@ pub fn builtin_function(
             instructions.push(SsmInstruction::Ldc(NULL_PTR));
             instructions.push(SsmInstruction::Eq);
 
-            Some(instructions)
+            Ok(Some(instructions))
         }
 
-        _ => None,
+        _ => Ok(None),
     }
 }

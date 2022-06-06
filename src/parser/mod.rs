@@ -215,7 +215,6 @@ fn type_parser(tokens: Tokens) -> IResult<Tokens, Type, Error> {
         map(bool_type_parser, |_| Type::Bool),
         map(char_type_parser, |_| Type::Char),
         tuple_type_parser,
-        function_type_parser,
         array_type_parser,
         map(identifier_parser, Type::Var),
     ))(tokens)
@@ -259,7 +258,7 @@ fn fun_decl_parser(tokens: Tokens) -> IResult<Tokens, FunDecl, Error> {
                     separated_list0(comma_parser, identifier_parser),
                     closing_paren_parser,
                 ),
-                opt(type_parser),
+                opt(function_type_parser),
                 tuple((
                     opening_brace_parser,
                     many0(var_decl_parser),

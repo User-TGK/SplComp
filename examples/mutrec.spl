@@ -17,4 +17,8 @@ even (x) {
 
 main () {
     print(odd(1));
+    print(odd(2));
+    
+    print(even(1));
+    print(even(2));
 }

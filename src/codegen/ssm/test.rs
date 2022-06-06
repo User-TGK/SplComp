@@ -64,12 +64,6 @@ fn ssm_code_gen_test_helper_output(input_filename: String, expected_output: &str
     );
 }
 
-#[test]
-fn ssm_print_output() {
-    let output = "1\na\n(2,b)\n((1,2),(a,b))\n[(1,2),(5,6)]\n[[(1,2),(5,6)],[(1,2),(5,6)]]\n\nmachine halted\n";
-    ssm_code_gen_test_helper_output(String::from("tests/ssm/print.spl"), output);
-}
-
 fn ssm_code_gen_test_helper(node: impl SsmInstructions, expected: Vec<SsmInstruction>) {
     let mut env = LocationEnv::default();
     let mut heap_offset = 0;
@@ -120,4 +114,82 @@ fn test_string_lit_equivalence_ssm() {
 
     ssm_code_gen_test_helper(literal, expected_instructions.clone());
     ssm_code_gen_test_helper(list, expected_instructions);
+}
+
+#[test]
+fn test_material_sum_example_ssm() {
+    let output = "6\n6\n6\n\nmachine halted\n";
+    ssm_code_gen_test_helper_output(String::from("material/tests/sum.spl"), output);
+}
+
+#[test]
+fn test_example_print_ssm() {
+    let output = "1\na\n(2,b)\n((1,2),(a,b))\n[(1,2),(5,6)]\n[[(1,2),(5,6)],[(1,2),(5,6)]]\n\nmachine halted\n";
+    ssm_code_gen_test_helper_output(String::from("examples/print.spl"), output);
+}
+
+#[test]
+fn test_example_mutec_ssm() {
+    let output = "-1\n0\n0\n-1\n\nmachine halted\n";
+    ssm_code_gen_test_helper_output(String::from("examples/mutrec.spl"), output);
+}
+
+#[test]
+fn test_example_string_ssm() {
+    let output = "[H,e,l,l,o, ,w,o,r,l,d]\n\nmachine halted\n";
+    ssm_code_gen_test_helper_output(String::from("examples/string.spl"), output);
+}
+
+#[test]
+fn test_example_string_literal_ssm() {
+    let output = "H\ne\nl\nl\no\n\nmachine halted\n";
+    ssm_code_gen_test_helper_output(String::from("examples/string_literal.spl"), output);
+}
+
+#[test]
+fn test_example_shadowing_ssm() {
+    let output = "1\n2\n3\n\nmachine halted\n";
+    ssm_code_gen_test_helper_output(String::from("examples/shadowing.spl"), output);
+}
+
+#[test]
+fn test_example_vowels_ssm() {
+    let output = "-1\n0\n\nmachine halted\n";
+    ssm_code_gen_test_helper_output(String::from("examples/vowels.spl"), output);
+}
+
+#[test]
+fn test_example_reverse_ssm() {
+    let output = "2\n[1]\n7\n[6,5,4]\n\nmachine halted\n";
+    ssm_code_gen_test_helper_output(String::from("examples/reverse.spl"), output);
+}
+
+#[test]
+fn test_example_sum_ssm() {
+    let output = "15\n5050\n\nmachine halted\n";
+    ssm_code_gen_test_helper_output(String::from("examples/sum.spl"), output);
+}
+
+#[test]
+fn test_example_side_effect_eval_ssm() {
+    let output = "[l,i,n,k,s]\n[r,e,c,h,t,s]\n\nmachine halted\n";
+    ssm_code_gen_test_helper_output(String::from("examples/side_effect_eval.spl"), output);
+}
+
+#[test]
+fn test_example_pass_by_value_ssm() {
+    let output = "10\n5\n\nmachine halted\n";
+    ssm_code_gen_test_helper_output(String::from("examples/pass_by_value.spl"), output);
+}
+
+#[test]
+fn test_example_pass_by_reference_ssm() {
+    let output = "0\n1\n\nmachine halted\n";
+    ssm_code_gen_test_helper_output(String::from("examples/pass_by_reference.spl"), output);
+}
+
+#[test]
+fn test_example_equals_ssm() {
+    let output = "[a, ,=,=, ,b]\n[b, ,!,=, ,c]\n[c,.,f,s,t, ,=,=, ,d,.,f,s,t]\n[d, ,=,=, ,e]\n\nmachine halted\n";
+    ssm_code_gen_test_helper_output(String::from("examples/equals.spl"), output);
 }
