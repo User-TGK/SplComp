@@ -62,9 +62,9 @@ impl ReturnPathAnalysis for Statement {
                 (Returning::NoneExplicit, Returning::All) => Returning::All,
             },
 
-            Statement::While(_w) => Returning::NoneImplicit,
-            Statement::Assign(_a) => Returning::NoneImplicit,
-            Statement::FunCall(_f) => Returning::NoneImplicit,
+            Statement::While(_) | Statement::Assign(_) | Statement::FunCall(_) => {
+                Returning::NoneImplicit
+            }
             Statement::Return(e) => match e {
                 Some(_) => Returning::All,
                 None => Returning::NoneExplicit,

@@ -1,5 +1,8 @@
 mod builtin;
 
+#[cfg(test)]
+mod test;
+
 use crate::ast::*;
 
 use builtin::*;
@@ -174,6 +177,61 @@ impl ToC for Program {
             }
 
             typedef enum {Int, Char, Bool, Tuple, List} Type;
+
+            // Equals function that compares two values based on their type.
+            bool _equals(intptr_t v1, intptr_t v2, struct node** types) {
+                struct node* current_type = *types;
+
+                if (current_type->data == Int || current_type->data == Bool || current_type->data == Char) {
+                    // Advance the types pointer by one
+                    (*types) = current_type->tail; 
+
+                    return v1 == v2;
+                } else if (current_type->data == List) {
+                    struct node* hd1 = (struct node*) v1;
+                    struct node* hd2 = (struct node*) v2;
+
+                    struct node* inner_type = current_type->tail;
+                    
+                    while (hd1 != NULL && hd2 != NULL) {
+                        if (!_equals(hd1->data, hd2->data, &inner_type)) {
+                            (*types) = inner_type;
+                            return false;
+                        }
+
+                        hd1 = hd1->tail;
+                        hd2 = hd2->tail;
+
+                        if (hd1 == NULL || hd2 == NULL) {
+                            (*types) = inner_type;
+                            return hd1 == hd2;
+                        }
+
+                        // Reset the current_type pointer.
+                        inner_type = current_type->tail;
+                    }
+
+                    return true;
+                } else if (current_type->data == Tuple) {
+                    struct tuple* t1 = to_tuple_ptr(v1);
+                    struct tuple* t2 = to_tuple_ptr(v2);
+
+                    // Advance the types pointer by one
+                    (*types) = (*types)->tail;
+
+                    // Compare the first component (advances the types pointer by one)
+                    if (!_equals(t1->fst, t2->fst, types)) {
+                        return false;
+                    }
+
+                    // Compare the second component (advances the types pointer by one)
+                    return _equals(t1->snd, t2->snd, types);
+                }
+            }
+
+            bool equals(intptr_t v1, intptr_t v2, struct node* types) {
+                return _equals(v1, v2, &types);
+            }
 
             // Print function that prints a value based on its type.
             // Returns a pointer to the types list remainder (which still needs to be printed)
@@ -498,6 +556,25 @@ impl ToC for Assign {
     }
 }
 
+fn value_equivalence(
+    e1: &Box<TypedExpr>,
+    e2: &Box<TypedExpr>,
+    env: &mut CEnv,
+) -> Result<Box<dyn Pretty>, String> {
+    Ok(Box::new(
+        "equals((intptr_t)".join(
+            e1.to_c(env)?
+                .join(", (intptr_t)")
+                .join(e2.to_c(env)?)
+                .join(", ")
+                .join(
+                    builtin::print_type_list(e1.expr_type.as_ref().unwrap(), String::from("NULL"))?
+                        .join(")"),
+                ),
+        ),
+    ))
+}
+
 impl ToC for TypedExpr {
     fn to_c(&self, env: &mut CEnv) -> Result<Box<dyn Pretty>, String> {
         let precedence = self.precedence();
@@ -505,8 +582,8 @@ impl ToC for TypedExpr {
         match &self.expr {
             Expr::Or(e1, e2) => bin_expr!(e1, e2, env, precedence, " || "),
             Expr::And(e1, e2) => bin_expr!(e1, e2, env, precedence, " && "),
-            Expr::Equals(e1, e2) => bin_expr!(e1, e2, env, precedence, " == "),
-            Expr::NotEquals(e1, e2) => bin_expr!(e1, e2, env, precedence, " != "),
+            Expr::Equals(e1, e2) => value_equivalence(e1, e2, env),
+            Expr::NotEquals(e1, e2) => Ok(Box::new("!".join(value_equivalence(e1, e2, env)?))),
             Expr::Lt(e1, e2) => bin_expr!(e1, e2, env, precedence, " < "),
             Expr::Le(e1, e2) => bin_expr!(e1, e2, env, precedence, " <= "),
             Expr::Gt(e1, e2) => bin_expr!(e1, e2, env, precedence, " > "),

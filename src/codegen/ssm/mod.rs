@@ -597,16 +597,16 @@ impl SsmInstructions for Expr {
             Expr::And(e1, e2) => bin_exp!(e1, e2, env, heap_offset, gen, vec![SsmInstruction::And]),
             Expr::Equals(e1, e2) => {
                 let mut instructions =
-                    builtin::equals_instructions(e1.expr_type.as_ref().unwrap(), gen);
+                    builtin::equals_instructions(e1.expr_type.as_ref().unwrap(), gen)?;
                 instructions.push(SsmInstruction::Ldr(RR.into()));
 
                 bin_exp!(e1, e2, env, heap_offset, gen, instructions)
             }
             Expr::NotEquals(e1, e2) => {
                 let mut instructions =
-                    builtin::equals_instructions(e1.expr_type.as_ref().unwrap(), gen);
+                    builtin::equals_instructions(e1.expr_type.as_ref().unwrap(), gen)?;
                 instructions.push(SsmInstruction::Ldr(RR.into()));
-                instructions.push(SsmInstruction::Ne);
+                instructions.push(SsmInstruction::Not);
 
                 bin_exp!(e1, e2, env, heap_offset, gen, instructions)
             }
@@ -695,7 +695,7 @@ impl SsmInstructions for FunCall {
             instructions.append(&mut a.instructions(env, heap_offset, prefix_gen)?);
         }
 
-        if let Some(mut builtin_instructions) = builtin_function(&self, prefix_gen) {
+        if let Some(mut builtin_instructions) = builtin_function(&self, prefix_gen)? {
             instructions.append(&mut builtin_instructions);
         } else {
             instructions.push(SsmInstruction::Bsr(self.name.0.clone()));

@@ -4,10 +4,12 @@ mod test;
 mod builtin;
 mod return_path_analysis;
 pub mod tarjan;
+mod update;
 
 use builtin::Builtin;
 use return_path_analysis::{ReturnPathAnalysis, Returning};
 use tarjan::Preprocess;
+use update::UpdateType;
 
 use crate::ast::*;
 
@@ -987,7 +989,9 @@ impl TypeInference for Program {
                 let infered_fun_type = subst[&fresh_sequence[var_index]].clone().apply(&subst);
                 let name = self.fun_decls[*fun_index].name.clone();
 
-                match &mut self.fun_decls[*fun_index].fun_type {
+                let fun_decl = &mut self.fun_decls[*fun_index];
+
+                match &mut fun_decl.fun_type {
                     Some(t) => {
                         let s2 = infered_fun_type.mgu_specified(&t)?.compose(&subst);
                         context.apply(&s2);
@@ -995,7 +999,7 @@ impl TypeInference for Program {
                         let generalized = context.generalize(&t.apply(&s2));
                         context.functions.insert(name, generalized);
 
-                        self.fun_decls[*fun_index].fun_type = Some(t.apply(&s2));
+                        fun_decl.fun_type = Some(t.apply(&s2));
                     }
                     None => {
                         context.apply(&subst);
@@ -1003,8 +1007,17 @@ impl TypeInference for Program {
                         let generalized = context.generalize(&infered_fun_type.apply(&subst));
                         context.functions.insert(name, generalized);
 
-                        self.fun_decls[*fun_index].fun_type = Some(infered_fun_type.apply(&subst));
+                        fun_decl.fun_type = Some(infered_fun_type.apply(&subst));
                     }
+                }
+            }
+
+            for fun_index in component {
+                let fun_decl = &mut self.fun_decls[*fun_index];
+
+                for s in &mut fun_decl.statements {
+                    // In the case of mutually recursive functions we may have assigned a type too early.
+                    s.update_type(&subst);
                 }
             }
         }

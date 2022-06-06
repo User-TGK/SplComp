@@ -1,5 +1,12 @@
 var nested = (1, (3, 4));
 
+construct_1_2_tuple() :: -> (Int, Int) {
+    var x = (1,2);
+    return x;
+}
+
 main() {
+    var s = nested.snd.snd;
+
     print(nested.snd);
 }

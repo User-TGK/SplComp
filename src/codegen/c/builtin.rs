@@ -4,7 +4,7 @@ use super::*;
 
 use pretty_trait::{JoinExt, Newline, Pretty};
 
-fn print_type_list(t: &Type, tail: String) -> Result<String, String> {
+pub fn print_type_list(t: &Type, tail: String) -> Result<String, String> {
     match t {
         Type::Int => Ok(format!("list_node_new(Int, {})", tail)),
         Type::Char => Ok(format!("list_node_new(Char, {})", tail)),
@@ -22,7 +22,7 @@ fn print_type_list(t: &Type, tail: String) -> Result<String, String> {
             ))
         }
         Type::Var(v) => Err(format!(
-            "Illegal call to 'print' with generic type '{}'",
+            "Illegal call to overloaded function ('print'/'equal') with generic type '{}'",
             v.0
         )),
         _ => unreachable!(),

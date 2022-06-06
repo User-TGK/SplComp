@@ -2,12 +2,16 @@ foo(a) {
     return;
 }
 
+hof(f) :: :: Int -> Int -> Void {
+    return;
+}
+
 bar(b) {
     return;
 }
 
 main() {
-    bar(foo);
+    //bar(foo);
 
     return;
 }

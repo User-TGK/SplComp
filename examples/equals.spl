@@ -1,21 +1,30 @@
 main () {
-    var a = ((2:2:[]), ('a', 1));
-    var b = ((2:[]), ('a', 1));
+    var a = ((2:22:[]), ('a', 1));
+    var b = ((2:22:[]), ('a', 1));
+    var c = ((2:23:[]), ('a', 1));
+    var d = ( (2:23:[]), ('a', ('b' : 'c' : []) ) );
+    var e = ( (2:23:[]), ('a', ('b' : 'c' : []) ) );
 
-    var c = 1 : 2 : [];
-    var d = c : c : [];
 
-    if (d == d) {
-        print("d == d");
-    } else {
-        print("d != d");
-    }
+    // WARNING
+    // PRINT and EQUIV produce specialized code, thus many instructions.
+    // If we uncomment everything we get "illegal instruction ...", when in fact
+    // the problem is that we are overwriting some segments of the instructions by storing stuff on the heap.
 
     if (a == b) {
-        print("Equal");
+        print("a == b");
     }
-    else {
-        print("Not equal");
+
+    if (b != c) {
+        print("b != c");
+    }
+
+    if (c.fst == d.fst) {
+        print("c.fst == d.fst");
+    }
+
+    if (d == e) {
+        print("d == e");
     }
 
     return;

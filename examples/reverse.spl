@@ -9,8 +9,15 @@ reverse ( list ) :: [t] -> [t] {
 }
 
 main() {
-    var list = 1 : 2 : [];
-    var reverse_list = reverse(list);
+    var list1 = 1 : 2 : [];
+    var reverse_list1 = reverse(list1);
 
-    print(reverse_list.hd);
+    var list2 = 4 : 5 : 6 : 7 : [];
+    var reverse_list2 = reverse(list2);
+
+    print(reverse_list1.hd);
+    print(reverse_list1.tl);
+
+    print(reverse_list2.hd);
+    print(reverse_list2.tl);
 }
